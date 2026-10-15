@@ -152,6 +152,9 @@ const acts={
  'dc-say':()=>dictSay(false),'dc-slow':()=>dictSay(true),'dc-skip':()=>dictCheck(''),'dc-next':()=>{const X=view.X;X.i++;X.res=null;render();if(X.i<X.items.length)setTimeout(()=>dictSay(false),200)},
  'pr-rec':()=>pronRec(),'pr-next':()=>{const X=view.X;stopListen();X.i++;X.res=null;X.listening=false;render()},
  yarn:()=>startYarn(activeLang()),'yarn-new':()=>yarnGen(),'ls-add':()=>addTr(view.A.res,view.A.lang),
+ 'pair':()=>startPair(),'pair-cancel':()=>{pairToken=null;go('home')},
+ 'pair-copy':async()=>{try{await navigator.clipboard.writeText(view.P.link);toast('Link kopiert')}catch(e){toast('Kopieren ging nicht – nimm „Teilen“')}},
+ 'pair-share':async()=>{try{await navigator.share({title:'Vokabelkoje verbinden',text:'Link für mein anderes Gerät (Code steht auf dem Handy):',url:view.P.link})}catch(e){}},
  'gull-chat':()=>startGullChat(),'gull-talk':()=>{prefs.gullTalk=!gullTalks();savePrefs();if(!prefs.gullTalk)stopSpeak();render()},
  'gull-voice':b=>{prefs.gullEngine=b.dataset.v;savePrefs();render();speak(`Ahoi! Ich bin ${gullName()}.`,'de-DE',null,false,gullVoiceOpt())},
  'tts-test':async()=>{const st=$('#tts-st');if(st)st.textContent='Teste …';try{await cloudAudio('Ahoi! Die Gemini-Stimme funktioniert.','de-DE',{voice:prefs.gullVoice||'Puck'});if($('#tts-st'))$('#tts-st').textContent='✓ Gemini-Stimme klappt ('+(prefs.ttsModel||'')+')';speak('Ahoi! Die Gemini-Stimme funktioniert.','de-DE',null,false,{cloud:true,voice:prefs.gullVoice||'Puck'})}catch(e){if($('#tts-st'))$('#tts-st').textContent='✗ '+e.message}},'g-retry':()=>gullSend(null),'g-add':b=>{const t=view.G.turns[+b.dataset.i];if(t)addTr(t.tr,view.lang)},
@@ -217,6 +220,7 @@ app.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;
   db.me={...db.me,gull:g,name:y||db.me.name||'',upd:now()};const cp=curProf();if(cp&&y&&!cp.name){cp.name=y;cp.upd=now();saveProfs()}save();view.W.step=2;view.W.gull=g;view.W.you=y;
   if(!activeLang()&&cp&&cp.kid)setLang('en-GB');render()}
  if(id==='dc-form'&&view.X&&!view.X.res){const v=$('#dc-in').value;if(v.trim())dictCheck(v)}
+ if(id==='pair-form'){pairSubmit();return}
  if(id==='g-form'){const v=$('#g-in').value.trim();if(v&&view.G&&!view.G.busy)gullSend(v)}
  if(id==='ls-form')listenTranslate();
  if(id==='c-form'){const v=$('#c-in').value.trim();if(v&&!view.C.busy)talkSend(v)}
@@ -232,3 +236,4 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
 render();
 if(canSync())setTimeout(sync,800);
 watchUpdates();
+checkPairLink();

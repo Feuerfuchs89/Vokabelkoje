@@ -186,3 +186,54 @@ function vGull(){const G=view.G,L=view.lang,mine=G.turns.filter(t=>t.role==='use
   :`<form class="write" id="g-form" autocomplete="off"><input id="g-in" lang="${short(L)}" placeholder="Antwort auf ${langName(L)} – oder „Was heißt …?“" aria-label="Deine Nachricht" ${G.busy?'disabled':''}>${micBtn('g-in',L)}<button class="btn primary" ${G.busy?'disabled':''}>Senden</button></form>${dictHint}
   <p class="hint">Tipp: Frag einfach „Was heißt Fender?“ oder „Wie sage ich ‚Ich habe Hunger‘?“</p>`}`;
  app.innerHTML=h;const ch=document.querySelector('.chat');if(ch&&ch.lastElementChild&&ch.lastElementChild.scrollIntoView)ch.lastElementChild.scrollIntoView({block:'nearest'})}
+
+/* ---------- Neues Gerät verbinden ---------- */
+// Schlüssel und Token per Link (oder QR-Code) + 6-stelligem Code aufs nächste eigene Gerät übertragen.
+// Der Inhalt ist mit dem Code verschlüsselt (AES-GCM, PBKDF2) und steht nur hinter dem # der Adresse – das sieht kein Server.
+const PAIR_TTL=30*60*1000;
+const b64u={enc:u=>btoa(String.fromCharCode(...u)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''),dec:t=>{t=t.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';return Uint8Array.from(atob(t),c=>c.charCodeAt(0))}};
+async function pairKey(pin,salt){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(String(pin)),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+const pairOK=()=>STANDALONE&&typeof crypto!=='undefined'&&!!crypto.subtle&&!!(prefs.gemKey||prefs.ghToken);
+async function makePair(){const r=n=>crypto.getRandomValues(new Uint8Array(n));const pin=String(100000+(crypto.getRandomValues(new Uint32Array(1))[0]%900000));
+ const salt=r(16),iv=r(12),data={v:1,t:Date.now(),k:prefs.gemKey||'',g:prefs.ghToken||'',i:prefs.gistId||'',s:{ttsEngine:prefs.ttsEngine,ttsVoice:prefs.ttsVoice,gullEngine:prefs.gullEngine,gullVoice:prefs.gullVoice,theme:prefs.theme,rate:prefs.rate}};
+ const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},await pairKey(pin,salt),new TextEncoder().encode(JSON.stringify(data))));
+ const all=new Uint8Array(salt.length+iv.length+ct.length);all.set(salt);all.set(iv,16);all.set(ct,28);
+ return {pin,link:location.origin+location.pathname+'#pair='+b64u.enc(all),until:Date.now()+PAIR_TTL}}
+async function readPair(token,pin){const all=b64u.dec(token),salt=all.slice(0,16),iv=all.slice(16,28),ct=all.slice(28);
+ const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv},await pairKey(pin,salt),ct);return JSON.parse(new TextDecoder().decode(pt))}
+let qrLib=null;
+function loadQR(){if(window.qrcode)return Promise.resolve(window.qrcode);if(qrLib)return qrLib;
+ qrLib=new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';sc.onload=()=>window.qrcode?res(window.qrcode):rej();sc.onerror=()=>{qrLib=null;rej()};document.head.appendChild(sc)});return qrLib}
+async function startPair(){if(!pairOK())return toast('Erst Gemini-Schlüssel oder GitHub-Token eintragen');go('pairOut',{P:{busy:true}});
+ try{const P=await makePair();view.P={...P,busy:false};render();
+  loadQR().then(q=>{if(view.name!=='pairOut'||view.P.link!==P.link)return;const qr=q(0,'L');qr.addData(P.link);qr.make();const el=$('#pair-qr');if(el){el.innerHTML=qr.createSvgTag(4,2);el.hidden=false}}).catch(()=>{})}
+ catch(e){view.P={busy:false,err:'Das hat auf diesem Gerät nicht geklappt.'};render()}}
+function vPairOut(){const P=view.P;let h=bar('backup','Neues Gerät verbinden')+`<div class="form"><h1>Neues Gerät verbinden</h1>`;
+ if(P.busy){app.innerHTML=h+'<p class="thinking">Einen Moment …</p></div>';return}
+ if(P.err){app.innerHTML=h+errHtml(P.err)+'</div>';return}
+ h+=`<p class="muted">Überträgt deinen ${prefs.gemKey?'Gemini-Schlüssel':''}${prefs.gemKey&&prefs.ghToken?' und ':''}${prefs.ghToken?'GitHub-Token (und damit deinen Lernstand)':''} auf dein anderes Gerät. Dort musst du nichts abtippen.</p>
+ <section class="panel pair"><b>1. Auf dem neuen Gerät öffnen</b><div id="pair-qr" class="pair-qr" hidden></div>
+  <span class="hint">QR-Code mit der Kamera scannen – oder den Link an dich selbst schicken und dort öffnen.</span>
+  <div class="btn-row">${navigator.share?'<button class="btn" data-act="pair-share">Link teilen</button>':''}<button class="btn" data-act="pair-copy">Link kopieren</button></div></section>
+ <section class="panel pair"><b>2. Diesen Code dort eingeben</b><div class="pair-pin" aria-label="Code ${P.pin.split('').join(' ')}">${P.pin.slice(0,3)} ${P.pin.slice(3)}</div>
+  <span class="hint">Gilt 30 Minuten. Link und Code gehören zusammen – schick sie nie zusammen an andere.</span></section>
+ <p class="note">Nur für deine <b>eigenen</b> Geräte. Familienmitglieder richten ihre eigenen Schlüssel ein, sonst vermischen sich die Lernstände.</p></div>`;
+ app.innerHTML=h}
+// Beim Start: Link mit #pair= erkannt
+let pairToken=null;
+function checkPairLink(){if(!STANDALONE||typeof location==='undefined')return;const m=/[#&]pair=([A-Za-z0-9_-]+)/.exec(location.hash||'');if(!m)return;pairToken=m[1];
+ try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}go('pairIn',{P:{pin:'',err:'',tries:0,busy:false}})}
+function vPairIn(){const P=view.P;app.innerHTML=`<div class="form pair-in"><div class="w-gull">${gullSVG('happy',96,'salute')}</div><h1>Gerät verbinden</h1>
+ <p class="muted">Gib den 6-stelligen Code ein, der auf deinem anderen Gerät steht.</p>
+ <form id="pair-form" class="stack" autocomplete="off"><input id="pair-pin" class="big-input pair-pin-in" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="123 456" aria-label="Code" value="${esc(P.pin)}">
+ <button class="btn primary wide" ${P.busy?'disabled':''}>${P.busy?'Verbinde …':'Verbinden'}</button></form>${errHtml(P.err)}
+ <button class="linkbtn" data-act="pair-cancel">Abbrechen</button></div>`;const i=$('#pair-pin');if(i&&i.focus)i.focus()}
+async function pairSubmit(){const P=view.P,inp=$('#pair-pin');const pin=(inp&&inp.value||'').replace(/\D/g,'');P.pin=pin;if(pin.length!==6){P.err='Der Code hat 6 Ziffern.';return render()}
+ P.busy=true;P.err='';render();
+ try{const d=await readPair(pairToken,pin);if(!d||Date.now()-d.t>PAIR_TTL)throw new Error('alt');
+  if(d.k)prefs.gemKey=d.k;if(d.g){prefs.ghToken=d.g;prefs.gistId=d.i||'';prefs.syncErr=''}
+  Object.entries(d.s||{}).forEach(([k,v])=>{if(v!=null&&v!=='')prefs[k]=v});savePrefs();applyTheme();pairToken=null;
+  toast(d.g?'Verbunden! Dein Lernstand wird geholt …':'Verbunden! Der Gemini-Schlüssel ist eingetragen.');go('home');if(d.g&&canSync()){await sync();if(view.name==='home')render()}}
+ catch(e){P.busy=false;P.tries++;if(e&&e.message==='alt'){P.err='Dieser Link ist abgelaufen. Erstell auf dem anderen Gerät einen neuen.';pairToken=null}
+  else P.err=P.tries>=5?'Zu viele Versuche. Erstell auf dem anderen Gerät einen neuen Link.':'Der Code passt nicht. Schau nochmal genau hin.';if(P.tries>=5)pairToken=null;render()}}

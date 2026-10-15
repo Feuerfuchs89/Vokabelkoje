@@ -6,7 +6,7 @@ const card=(s,id)=>s&&s.cards.find(c=>c.id===id);
 const pool=s=>starOnly[s.id]?s.cards.filter(c=>c.star):s.cards;
 function go(name,p={}){if(name==='home'&&!p.tab)p.tab=lastTab;clearInterval(timer);if(typeof stopGull==='function')stopGull();timer=null;stopListen();if(view.H)view.H.stopped=true;releaseWake();stopSpeak();
  view={name,...p};render();window.scrollTo(0,0)}
-function render(){({home:vHome,set:vSet,edit:vEdit,flash:vFlash,q:vQ,test:vTest,match:vMatch,hands:vHands,voices:vVoices,listen:vListen,gull:vGull,dict:vDict,pron:vPron,backup:vBackup,reader:vReader,talk:vTalk,check:vCheck,drill:vDrill,courseNew:vCourseNew,course:vCourse,unit:vUnit,logbook:vLogbook,profiles:vProfiles,langPick:vLangPick,trophies:vTrophies,kid:vKid})[view.name]();if(view.name==='home'){hookChart();hookGull()}else stopGull();try{voiceNote(view.name==='kid'?kidLang():null)}catch(e){}if(view.name==='course')hookMap()}
+function render(){({home:vHome,set:vSet,edit:vEdit,flash:vFlash,q:vQ,test:vTest,match:vMatch,hands:vHands,voices:vVoices,listen:vListen,gull:vGull,pairOut:vPairOut,pairIn:vPairIn,dict:vDict,pron:vPron,backup:vBackup,reader:vReader,talk:vTalk,check:vCheck,drill:vDrill,courseNew:vCourseNew,course:vCourse,unit:vUnit,logbook:vLogbook,profiles:vProfiles,langPick:vLangPick,trophies:vTrophies,kid:vKid})[view.name]();if(view.name==='home'){hookChart();hookGull()}else stopGull();try{voiceNote(view.name==='kid'?kidLang():null)}catch(e){}if(view.name==='course')hookMap()}
 let toastT;function toast(msg){if(!msg)return;const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!wake)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 function releaseWake(){try{if(wake)wake.release()}catch(e){}wake=null}
@@ -38,7 +38,7 @@ const netBtn=()=>{const off=learnOffline();return `<button class="net-btn ${off?
 /* ---------- Vorlesen ---------- */
 // Zwei Wege: die Stimme des Geräts (Web Speech) und, in der GitHub-Version mit Gemini-Schlüssel, eine Gemini-Stimme als Ersatz.
 const hasTTS=(()=>{try{return 'speechSynthesis' in window&&typeof SpeechSynthesisUtterance!=='undefined'}catch(e){return false}})();
-let voices=[],ttsErr='',ttsOk=false,curU=null,ttsHinted=false,lastSay={t:'',at:0};
+let gemFailHinted=false,voices=[],ttsErr='',ttsOk=false,curU=null,ttsHinted=false,lastSay={t:'',at:0};
 function loadVoices(){try{voices=hasTTS?(speechSynthesis.getVoices()||[]):[]}catch(e){voices=[]}}
 if(hasTTS){loadVoices();try{speechSynthesis.addEventListener('voiceschanged',()=>{loadVoices();if(view.name==='voices')render();else voiceNote()})}catch(e){}}
 const vlang=v=>(v.lang||'').replace('_','-').toLowerCase();
@@ -89,7 +89,9 @@ async function cloudAudio(text,lang,opt={}){const voice=opt.voice||prefs.ttsVoic
 function cloudSpeak(t,lang,slow,fin,gen,fallback,voice){const p=getPlayer();if(!p){if(fallback)return fallback();fin();return}
  cloudAudio(t,lang,{voice}).then(url=>{if(gen!==speakGen)return fin();p.onended=()=>{ttsOk=true;fin()};p.onerror=()=>{ttsErr='Abspielen ging nicht';fin()};p.src=url;p.playbackRate=slow?.75:1;
   const pr=p.play();if(pr&&pr.catch)pr.catch(e=>{ttsErr=/NotAllowed/i.test(e&&e.name||'')?'not-allowed':'Abspielen ging nicht';if(ttsErr==='not-allowed')toast('Zum Anhören einmal auf den Lautsprecher tippen');fin()});ttsErr=''})
- .catch(e=>{if(gen!==speakGen)return fin();if(fallback){if(!(e instanceof OfflineMiss))ttsErr=e.message;return fallback()}ttsErr=e.message;if(e instanceof OfflineMiss&&!hasTTS)voiceNote(lang,true);else toast(e.message);fin()})}
+ .catch(e=>{if(gen!==speakGen)return fin();if(fallback){if(!(e instanceof OfflineMiss)){ttsErr=e.message;
+  // Einmal pro Start sagen, warum statt Gemini die Gerätestimme spricht
+  if(!gemFailHinted){gemFailHinted=true;toast(`Gemini-Stimme gerade nicht verfügbar: ${e.message}. Die Gerätestimme springt ein.`)}}return fallback()}ttsErr=e.message;if(e instanceof OfflineMiss&&!hasTTS)voiceNote(lang,true);else toast(e.message);fin()})}
 function stopSpeak(){speakGen++;try{if(hasTTS)speechSynthesis.cancel()}catch(e){}if(player){try{player.pause()}catch(e){}}}
 // Lange Texte in Sätze teilen (Chrome bricht lange Äußerungen nach ca. 15 s ab)
 function chunks(t){if(t.length<=180)return [t];const out=[];let cur='';(t.match(/[^.!?…;:\n]+[.!?…;:\n]*\s*/g)||[t]).forEach(s=>{if((cur+s).length>180&&cur){out.push(cur.trim());cur=''}cur+=s});if(cur.trim())out.push(cur.trim());return out}

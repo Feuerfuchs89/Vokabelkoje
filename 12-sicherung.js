@@ -3,6 +3,7 @@
 function vBackup(){
  const counts=`${db.sets.length} Sets mit ${db.sets.reduce((n,s)=>n+s.cards.length,0)} Karten`;
  app.innerHTML=bar('home','Einstellungen')+`<div class="form"><h1>Einstellungen</h1>
+ ${pairOK()?`<section class="panel pair-cta"><div><b>Neues Gerät verbinden</b><span class="hint">Schlüssel und Lernstand per QR-Code oder Link aufs nächste eigene Gerät – ohne Abtippen.</span></div><button class="btn primary" data-act="pair">Verbinden</button></section>`:''}
  ${mePanel()}
  ${aiPanel()}
  <section class="panel"><h2>Sicherungsdatei</h2>

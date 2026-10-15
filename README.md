@@ -1,7 +1,96 @@
 # Vokabelkoje
 
-Karteikarten zum Sprachenlernen nach Quizlet-Vorbild: Lernen, Wiederholen nach Plan, Karteikarten, Test,
-Zuordnen und Freihändig-Modus, mit Vorlesen und Spracheingabe.
+Sprachen lernen auf großer Fahrt: Karteikarten, Lernpfade bis C2, Möwen-Schnack, Seeungeheuer-Wachen, Kindermodus.
+
+**App-Adresse:** https://feuerfuchs89.github.io/Vokabelkoje/
+
+Inhalt: [App installieren](#app-installieren) · [Gemini-Schlüssel holen](#gemini-schlüssel-holen-für-die-ki) ·
+[GitHub-Token holen](#github-token-holen-für-den-abgleich) · [Geräte verbinden](#weitere-eigene-geräte-verbinden-ohne-abtippen) · [Für die Familie](#für-die-familie) ·
+[Auf GitHub Pages bringen](#auf-github-pages-bringen)
+
+## App installieren
+
+- **Android:** Adresse in **Chrome** öffnen → Menü **⋮** → **App installieren** (oder „Zum Startbildschirm hinzufügen“).
+- **iPhone/iPad:** Adresse in **Safari** öffnen → **Teilen** → **Zum Home-Bildschirm**.
+  Wichtig: Nur so bleiben die Daten sicher; Safari löscht Daten von Webseiten, die 7 Tage nicht geöffnet wurden.
+- Beim ersten Start: Möwe taufen, Lernsprache wählen, loslegen.
+
+Alle Lerndaten, Schlüssel und Einstellungen liegen **nur auf dem eigenen Gerät** (im Browser). Updates der App ändern daran nichts.
+Weg sind sie nur, wenn man in Chrome die Websitedaten löscht, die App deinstalliert oder ein anderes Gerät/einen anderen Browser nimmt.
+
+## Gemini-Schlüssel holen (für die KI)
+
+Ohne Schlüssel gehen Karteikarten, Lernen, Test, Zuordnen, Wache, Hördiktat und Startpaket.
+Mit Schlüssel kommen dazu: Lernpfade, Schnack mit der Möwe, Gespräche, Übersetzen, Foto-Erkennung, Seemannsgarn,
+Tagesübung und die Gemini-Stimme. Der Schlüssel ist kostenlos.
+
+1. Im Browser **aistudio.google.com/apikey** öffnen und mit dem eigenen **Google-Konto** anmelden
+   (beim ersten Mal die Nutzungsbedingungen bestätigen).
+2. Auf **„Create API key“** tippen. Falls gefragt: **„Create API key in new project“**.
+3. Den Schlüssel (beginnt meist mit `AIza…`) mit dem **Kopier-Symbol** kopieren.
+4. In der Vokabelkoje: **Profil → Einstellungen und Sicherung → KI (Gemini)** → einfügen → **Speichern**.
+5. Optional: **Profil → Ton und Stimmen → „Gemini-Stimme testen“** zeigt, ob auch die KI-Stimme verfügbar ist.
+
+Achtung, nicht verwirren lassen:
+- **Nichts upgraden.** AI Studio wirbt teils mit „Upgrade“ oder „Continue to upgrade“ – das braucht die App nicht.
+- **Keinen Agenten verknüpfen.** Seiten wie „Link an API key to unlock … Agent“ ignorieren.
+- Wer im Menü landet: links oben **☰** → **„Get API key“** bzw. **„API keys“**.
+
+Gut zu wissen:
+- Die kostenlose Stufe hat ein **Tageslimit**. Ist es aufgebraucht, nimmt die App ein sparsameres Modell
+  bzw. bei der Stimme die Gerätestimme; am nächsten Tag geht es wieder.
+- Google darf Eingaben aus der kostenlosen Stufe zur Verbesserung nutzen: **nichts Privates** eingeben
+  (z. B. keine echten Patientendaten).
+- Den Schlüssel **wie ein Passwort** behandeln und nicht weitergeben. Am besten im Passwort-Manager ablegen.
+- Jede Person nimmt ihren **eigenen** Schlüssel, sonst teilt man sich das Tageslimit.
+
+## GitHub-Token holen (für den Abgleich)
+
+Nur nötig, wenn der Lernstand zwischen **mehreren eigenen Geräten** (z. B. Handy und PC) abgeglichen werden soll.
+
+1. Im Browser **github.com/settings/tokens** öffnen und anmelden.
+   (Ohne Konto: auf github.com kostenlos registrieren.)
+2. **Generate new token** → **Generate new token (classic)**.
+3. **Note:** z. B. `Vokabelkoje`.
+4. **Expiration:** **No expiration** (sonst hört der Abgleich irgendwann auf).
+5. Bei den Häkchen **nur „gist“** anhaken – sonst nichts.
+6. Ganz unten **Generate token** → den Token (beginnt mit `ghp_…`) sofort **kopieren**.
+   GitHub zeigt ihn nur dieses eine Mal an.
+7. In der Vokabelkoje: **Profil → Einstellungen und Sicherung → Abgleich mit GitHub** → einfügen → speichern.
+8. Weitere eigene Geräte am einfachsten mit **„Neues Gerät verbinden“** einrichten (siehe unten) – dann muss nichts abgetippt werden.
+
+Die Daten liegen dann in einem **privaten Gist** im eigenen GitHub-Konto. Schlüssel und Token selbst werden dort nicht gespeichert.
+Den Token wie ein Passwort behandeln.
+
+## Weitere eigene Geräte verbinden (ohne Abtippen)
+
+Auf dem Gerät, das schon eingerichtet ist: **Profil → Einstellungen und Sicherung → „Neues Gerät verbinden“**.
+1. Auf dem neuen Gerät den **QR-Code scannen** (oder den Link an dich selbst schicken und dort öffnen).
+2. Den **6-stelligen Code** eingeben, der auf dem ersten Gerät steht.
+3. Fertig: Gemini-Schlüssel, GitHub-Token, Stimmen- und Farbeinstellungen sind übernommen, der Lernstand wird geholt.
+
+Der Link ist mit dem Code verschlüsselt und gilt 30 Minuten. Link und Code nie zusammen weitergeben.
+Nur für die **eigenen** Geräte – Familienmitglieder richten ihre eigenen Schlüssel ein.
+
+## Für die Familie
+
+Den Link **https://feuerfuchs89.github.io/Vokabelkoje/** einfach weiterschicken. Jede Person bekommt dieselbe App mit allen
+Funktionen und allen Updates, fängt aber **frisch an**: Die Daten liegen nur auf ihrem Gerät.
+
+Jede Person richtet einmal ein:
+1. **App installieren** (siehe oben).
+2. **Eigenen Gemini-Schlüssel** mit dem eigenen Google-Konto (siehe oben). Nicht den Schlüssel einer anderen Person
+   nehmen – sonst teilt man sich das Tageslimit.
+3. **Abgleich nur mit eigenem GitHub-Konto und eigenem Token.**
+   ⚠️ **Nie den Token einer anderen Person eintragen!** Beide Apps starten mit demselben ersten Profil,
+   die Lernstände würden sich vermischen.
+   Wer nur auf einem Gerät lernt, braucht gar keinen Token – dann ab und zu **Sicherung speichern**.
+
+**Kinder:** Auf dem Gerät, auf dem sie spielen, oben rechts aufs Profilbild → **Neues Profil** → Haken bei **Kindermodus**.
+Kinderprofile brauchen keinen Schlüssel und keine KI.
+
+**Mehrere Personen auf einem Gerät:** Pro Person ein eigenes Profil anlegen (oben rechts aufs Profilbild).
+Jedes Profil hat eigene Sprachen, Lernpfade, Möwe und Fortschritt.
 
 ## Auf GitHub Pages bringen
 
@@ -159,20 +248,16 @@ Online gibt es immer frische Aufgaben, offline oder beim Tageslimit springt die 
 Karten erzeugen (aus Text, Thema oder Foto), Beispielsätze ergänzen, Text lesen mit Wort-Nachschlagen
 und Gespräch üben laufen über Google Gemini. Einrichtung unter **Einstellungen → KI (Gemini) einrichten**:
 
-1. aistudio.google.com öffnen und mit dem Google-Konto anmelden.
-2. „Get API key“ → „Create API key“.
-3. Schlüssel in der App einfügen (auf jedem Gerät einmal).
+Schritt für Schritt siehe [Gemini-Schlüssel holen](#gemini-schlüssel-holen-für-die-ki). Auf jedem Gerät einmal eintragen.
 
-Die kostenlose Stufe hat ein Tageslimit. Ist das Hauptmodell ausgeschöpft, nimmt die App automatisch
-das sparsamere Flash-Lite-Modell. Google darf Eingaben aus der kostenlosen Stufe zur Verbesserung
-seiner Dienste nutzen, also nichts Privates eingeben. Wenn Google Modellnamen ändert, kannst du in
-den Einstellungen einen eigenen Modellnamen eintragen.
+Ist ein Modell ausgeschöpft oder nicht (mehr) verfügbar, nimmt die App automatisch das nächste. Neue Modellnamen schlägt sie
+einmal pro Woche direkt bei Google nach. Notfalls lässt sich in den Einstellungen ein eigener Modellname eintragen.
 
 ## Abgleich zwischen Handy und PC
 
-Unter „Einstellungen“ einmal pro Gerät einen GitHub-Token eintragen
-(Settings → Developer settings → Personal access tokens → Tokens (classic), nur Haken bei „gist“).
-Die Daten liegen dann in einem geheimen Gist `vokabelkoje.json` in deinem Konto.
+Unter „Einstellungen“ einmal pro Gerät denselben GitHub-Token eintragen, Schritt für Schritt siehe
+[GitHub-Token holen](#github-token-holen-für-den-abgleich). Die Daten liegen dann in einem geheimen Gist in deinem Konto.
+Familienmitglieder nehmen ein eigenes Konto und einen eigenen Token (siehe [Für die Familie](#für-die-familie)).
 
 Beim Abgleich zählen Antworten pro Gerät: 15 am Handy und 10 am PC ergeben 25 für Tagesziel und Serie.
 Bei Lernpfaden bleibt erhalten, was auf irgendeinem Gerät geschafft wurde. Während du tippst, wartet der Abgleich mit dem Neuzeichnen.
