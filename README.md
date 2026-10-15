@@ -124,6 +124,8 @@ In der Sprechblase der Möwe auf *Heute* steht „Schnacken?“. Die Möwe plaud
 - Fehler flüstert sie sofort zu („Psst: *jag var* statt *jag är*“), statt sie erst am Ende auszuwerten.
 - „Was heißt …?“ oder „Wie sage ich …?“ beantwortet sie mit einer Übersetzungskarte samt Lautsprecher und „+ ins Set“.
 - Was du über dich erzählst (Boot, Hobby, Familie), merkt sie sich pro Profil und fragt später nach. Heikles merkt sie sich nicht.
+- Mit Gemini-Schlüssel spricht die Möwe mit eigener Gemini-Stimme (einstellbar unter *Ton und Stimmen*, dort auch „Gemini-Stimme testen“).
+  Oben im Schnack lässt sie sich stummschalten. Ist das Stimmen-Kontingent aufgebraucht, spricht sie mit der Gerätestimme.
 - Die heutige Übung baut sie nebenbei ein. Jede Nachricht zählt fürs Tagesziel. Nur online, nicht im Kindermodus.
 - Ihre Korrekturen zählen mit: Taucht dasselbe Fehlermuster zum zweiten Mal auf, wird es eine Baustelle (und kann Tagesübung werden).
 - Nach einer vollen Runde schätzt sie dein Niveau; das fließt leicht in die Lernkurve ein (so viel wie ein Etappen-Check).

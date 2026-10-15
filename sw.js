@@ -1,5 +1,5 @@
 // Vokabelkoje – Offline-Cache. Bei Änderungen an der App die Versionsnummer erhöhen.
-const CACHE = 'vokabelkoje-v28';
+const CACHE = 'vokabelkoje-v30';
 const CORE = ['./', './index.html', './style.css', './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './01-grundlagen.js', './02-oberflaeche.js', './03-ki.js', './04-figuren.js', './05-profile.js', './06-startseite.js', './07-lernen.js', './08-ki-werkzeuge.js', './09-niveau.js', './10-lernpfad.js', './11-uebungen.js', './12-sicherung.js', './13-aktionen.js'];
 
 self.addEventListener('install', e => {

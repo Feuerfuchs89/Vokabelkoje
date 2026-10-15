@@ -1,6 +1,16 @@
 // Vokabelkoje – ki
 /* ---------- KI: Gemini (GitHub-Version) oder Claude (in Claude) ---------- */
-const GEM_MODELS=['gemini-3.8-flash','gemini-3.5-flash-lite'];
+// Kostenlose Stufe (Stand Okt. 2026): 3.8 Flash, 3.6 Flash, 3.5 Flash-Lite, 3.1 Flash-Lite. Bei 404/429 wird das nächste probiert.
+const GEM_MODELS=['gemini-3.8-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-flash-lite'];
+// Modelle direkt bei Google nachschlagen (einmal pro Woche), damit neue Namen ohne App-Update funktionieren
+async function gemModelList(){if(prefs.gemList&&prefs.gemListAt>Date.now()-7*864e5)return prefs.gemList;
+ try{const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':(prefs.gemKey||'').trim()}});if(!r.ok)return prefs.gemList||[];
+  const j=await r.json();const ver=n=>+((/(\d+(?:\.\d+)?)/.exec(n)||[])[1]||0);
+  const all=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>String(m.name||'').replace(/^models\//,''));
+  prefs.gemList=all.sort((a,b)=>ver(b)-ver(a)||(/lite/.test(a)?1:0)-(/lite/.test(b)?1:0)||(/preview/.test(a)?1:0)-(/preview/.test(b)?1:0));prefs.gemListAt=Date.now();savePrefs();return prefs.gemList}
+ catch(e){return prefs.gemList||[]}}
+const textModels=async()=>(await gemModelList()).filter(n=>/flash/.test(n)&&!/tts|image|live|embed|audio|transcribe|translate|thinking-exp/.test(n));
+const ttsModels=async()=>(await gemModelList()).filter(n=>/tts/.test(n));
 class AIError extends Error{}
 let claudeSample;
 if(!STANDALONE){try{if(window.claude&&window.claude.use)window.claude.use('sample').then(s=>{claudeSample=s}).catch(()=>{claudeSample=null});else claudeSample=null}catch(e){claudeSample=null}}
@@ -35,8 +45,9 @@ async function gemini(turns,{json,image,fresh}){
  if(!prefs.gemKey)throw new AIError('NOKEY');
  const contents=[];turns.forEach(t=>{const role=t.role==='assistant'?'model':'user';const last=contents[contents.length-1];if(last&&last.role===role)last.parts[0].text+='\n\n'+t.content;else contents.push({role,parts:[{text:t.content}]})});
  if(image)contents[contents.length-1].parts.push({inline_data:{mime_type:image.type||'image/jpeg',data:await blobToB64(image)}});
- const models=[...new Set([prefs.gemModel.trim(),...GEM_MODELS].filter(Boolean))];let last='Gemini ist gerade nicht erreichbar. Versuch es gleich nochmal.';
- for(const m of models){let r,data={};
+ let models=[...new Set([prefs.gemModel.trim(),...GEM_MODELS].filter(Boolean))];let last='Gemini ist gerade nicht erreichbar. Versuch es gleich nochmal.',found=false;
+ for(let mi=0;mi<models.length;mi++){const m=models[mi];let r,data={};
+  if(mi===models.length-1&&!found){found=true;const more=(await textModels()).filter(x=>!models.includes(x)).slice(0,4);models.push(...more)}
   try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':prefs.gemKey},
    body:JSON.stringify({contents,generationConfig:json?{responseMimeType:'application/json',temperature:fresh?.8:.4}:{temperature:.8}})})}
   catch(e){throw new AIError('Keine Verbindung zu Gemini. Bist du online?')}

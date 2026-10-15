@@ -49,7 +49,7 @@ function rankVoice(v,lang){let s=0;const n=v.name||'';
 const ranked=lang=>voicesFor(lang).sort((a,b)=>rankVoice(b,lang)-rankVoice(a,lang));
 function pickVoice(lang){const list=ranked(lang);if(!list.length)return null;const want=(prefs.voices||{})[lang];return (want&&list.find(v=>v.voiceURI===want))||list[0]}
 // Gemini-Stimme
-const TTS_MODELS=['gemini-3.1-flash-tts-preview','gemini-2.5-flash-preview-tts'];
+const TTS_MODELS=['gemini-3.8-flash-tts','gemini-3.8-flash-preview-tts','gemini-3.8-flash-lite-tts','gemini-3.1-flash-tts-preview','gemini-2.5-flash-preview-tts'];
 const cloudOK=()=>STANDALONE&&!!(prefs.gemKey||'').trim();
 const noDeviceVoice=lang=>!hasTTS||(voices.length>0&&!voicesFor(lang).length);
 const wantCloud=lang=>cloudOK()&&(prefs.ttsEngine==='gemini'||noDeviceVoice(lang));
@@ -69,23 +69,25 @@ async function audioToStore(key,blob){if(!hasStore())return;try{const c=await ca
 async function audioStoreCount(){if(!hasStore())return 0;try{return (await (await caches.open(AUDIO_STORE)).keys()).length}catch(e){return 0}}
 async function audioStoreClear(){audioCache.clear();if(hasStore())try{await caches.delete(AUDIO_STORE)}catch(e){}}
 class OfflineMiss extends Error{}
-const audioKey=(text,lang)=>lang+'|'+(prefs.ttsVoice||'Kore')+'|'+text;
-async function cloudAudio(text,lang,opt={}){const key=audioKey(text,lang);if(audioCache.has(key))return audioCache.get(key);
+const audioKey=(text,lang,voice)=>lang+'|'+(voice||prefs.ttsVoice||'Kore')+'|'+text;
+async function cloudAudio(text,lang,opt={}){const voice=opt.voice||prefs.ttsVoice||'Kore',key=audioKey(text,lang,voice);if(audioCache.has(key))return audioCache.get(key);
  const stored=await audioFromStore(key);if(stored){audioCache.set(key,stored);return stored}
  if(learnOffline())throw new OfflineMiss('Offline: Dieses Wort ist noch nicht gespeichert');
- let last='';
- for(const m of TTS_MODELS){let r;
+ let last='';const tm=[...new Set([...(prefs.ttsModel?[prefs.ttsModel]:[]),...TTS_MODELS,...(await ttsModels())])];
+ for(const m of tm){let r;
   try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':prefs.gemKey.trim()},
-   body:JSON.stringify({contents:[{parts:[{text:`Read aloud clearly in ${enLang(lang)}, nothing else: ${text}`}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:prefs.ttsVoice||'Kore'}}}}})})}
+   body:JSON.stringify({contents:[{parts:[{text:`Read aloud clearly in ${enLang(lang)}, nothing else: ${text}`}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}}})})}
   catch(e){throw new Error('Keine Verbindung zu Gemini')}
   if(r.ok){const j=await r.json();const part=(((j.candidates||[])[0]||{}).content||{}).parts||[];const inl=(part.find(p=>p.inlineData)||{}).inlineData;
    if(inl&&inl.data){const rate=+((/rate=(\d+)/.exec(inl.mimeType||'')||[])[1])||24000;const blob=pcmToWav(inl.data,rate),url=URL.createObjectURL(blob);audioToStore(key,blob);
     if(audioCache.size>150){const k0=audioCache.keys().next().value;try{URL.revokeObjectURL(audioCache.get(k0))}catch(e){}audioCache.delete(k0)}
-    audioCache.set(key,url);return url}last='Gemini hat kein Audio geliefert'}
-  else{if(r.status===429&&opt.stopOnLimit){const e=new Error('Gemini-Tageslimit für Stimmen erreicht');e.limit=true;throw e}last=r.status===429?'Gemini-Tageslimit für Stimmen erreicht':r.status===400||r.status===403?'Gemini-Schlüssel passt nicht für Stimmen':'Gemini-Stimme nicht erreichbar ('+r.status+')';if(r.status===400||r.status===403)break}}
+    audioCache.set(key,url);if(prefs.ttsModel!==m){prefs.ttsModel=m;savePrefs()}return url}last='Gemini hat kein Audio geliefert'}
+  else{if(r.status===429&&opt.stopOnLimit){const e=new Error('Gemini-Tageslimit für Stimmen erreicht');e.limit=true;throw e}let msg='';try{msg=((await r.json()).error||{}).message||''}catch(e){}
+   if(r.status===401||/api.?key/i.test(msg)){last='Der Gemini-Schlüssel passt nicht';break}
+   last=r.status===429?'Gemini-Tageslimit für Stimmen erreicht':r.status===404||r.status===400?'Für deinen Schlüssel gibt es gerade keine Gemini-Stimme':'Gemini-Stimme nicht erreichbar ('+r.status+')';if(prefs.ttsModel===m){prefs.ttsModel='';savePrefs()}}}
  throw new Error(last)}
-function cloudSpeak(t,lang,slow,fin,gen,fallback){const p=getPlayer();if(!p){if(fallback)return fallback();fin();return}
- cloudAudio(t,lang).then(url=>{if(gen!==speakGen)return fin();p.onended=()=>{ttsOk=true;fin()};p.onerror=()=>{ttsErr='Abspielen ging nicht';fin()};p.src=url;p.playbackRate=slow?.75:1;
+function cloudSpeak(t,lang,slow,fin,gen,fallback,voice){const p=getPlayer();if(!p){if(fallback)return fallback();fin();return}
+ cloudAudio(t,lang,{voice}).then(url=>{if(gen!==speakGen)return fin();p.onended=()=>{ttsOk=true;fin()};p.onerror=()=>{ttsErr='Abspielen ging nicht';fin()};p.src=url;p.playbackRate=slow?.75:1;
   const pr=p.play();if(pr&&pr.catch)pr.catch(e=>{ttsErr=/NotAllowed/i.test(e&&e.name||'')?'not-allowed':'Abspielen ging nicht';if(ttsErr==='not-allowed')toast('Zum Anhören einmal auf den Lautsprecher tippen');fin()});ttsErr=''})
  .catch(e=>{if(gen!==speakGen)return fin();if(fallback){if(!(e instanceof OfflineMiss))ttsErr=e.message;return fallback()}ttsErr=e.message;if(e instanceof OfflineMiss&&!hasTTS)voiceNote(lang,true);else toast(e.message);fin()})}
 function stopSpeak(){speakGen++;try{if(hasTTS)speechSynthesis.cancel()}catch(e){}if(player){try{player.pause()}catch(e){}}}
@@ -113,7 +115,7 @@ function speechText(text,lang){const L=short(lang||'');let t=String(text==null?'
   .replace(/\s+/g,' ').replace(/\s+([,.!?:])/g,'$1').replace(/([,:])(?:\s*[,:])+/g,'$1')
   .replace(/^[\s,.:;!?-]+|[\s,:;-]+$/g,'').trim();
  return t}
-function speak(text,lang,onEnd,slow){
+function speak(text,lang,onEnd,slow,opt={}){
  let done=false;const fin=()=>{if(!done){done=true;if(onEnd)onEnd()}};
  const t=speechText(text,lang);
  const busy=hasTTS&&(()=>{try{return speechSynthesis.speaking||speechSynthesis.pending}catch(e){return false}})();
@@ -139,7 +141,7 @@ function speak(text,lang,onEnd,slow){
  // Chrome verschluckt manchmal ein speak() direkt nach cancel()
  if(busy)setTimeout(run,80);else run()};
  // Gemini-Stimme (gewählt oder als Ersatz); offline nur, was schon gespeichert ist, sonst Gerätestimme
- if(wantCloud(lang))return cloudSpeak(t,lang,slow,fin,gen,hasTTS?device:null);
+ if(wantCloud(lang)||(opt.cloud&&cloudOK()))return cloudSpeak(t,lang,slow,fin,gen,hasTTS?device:null,opt.voice);
  device()}
 // Wörter der aktiven Sprache vorab als Gemini-Audio speichern, damit sie offline klingen
 let preload=null;
@@ -173,7 +175,7 @@ function unlockAudio(){if(audioUnlocked)return;audioUnlocked=true;
  try{if(hasTTS){const u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}}catch(e){}
  try{const p=getPlayer();if(p&&cloudOK()){p.src=SILENT_WAV;const r=p.play();if(r&&r.catch)r.catch(()=>{})}}catch(e){}}
 try{['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{once:true,passive:true,capture:true}))}catch(e){}
-const sayBtn=(text,lang)=>`<button class="say" data-act="say" data-text="${esc(text)}" data-lang="${esc(lang)}" aria-label="Anhören (zweimal tippen: langsam)" title="Anhören – zweimal tippen: langsam">${ICON.say}</button>`;
+const sayBtn=(text,lang,gull)=>`<button class="say" data-act="say" data-text="${esc(text)}" data-lang="${esc(lang)}"${gull?' data-gull="1"':''} aria-label="Anhören (zweimal tippen: langsam)" title="Anhören – zweimal tippen: langsam">${ICON.say}</button>`;
 const autoChip=()=>`<button class="chip ${prefs.auto?'on':''}" data-act="auto" aria-pressed="${prefs.auto}">Automatisch vorlesen</button>`;
 
 /* ---------- Spracheingabe ---------- */
