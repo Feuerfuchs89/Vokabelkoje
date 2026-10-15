@@ -99,9 +99,10 @@ function judge(ok){const s=getSet(view.id),f=view.f,c=card(s,f.order[f.i]);if(!c
  touch(c);logAnswer();db.fresh=false;save();f.i++;f.flipped=false;render()}
 
 /* ---------- Lernen und Wiederholen ---------- */
+const LEARN_CHUNK=10; // neue Begriffe pro Lernrunde – lieber öfter kleine Portionen
 function startLearn(s,reset){
  if(reset){s.cards.forEach(c=>{c.m=0;c.lv=0;c.due=0;touch(c)});save()}
- const items=shuffle(pool(s).filter(c=>c.lv<1).map(c=>({sid:s.id,cid:c.id})));
+ const items=shuffle(pool(s).filter(c=>c.lv<1).map(c=>({sid:s.id,cid:c.id}))).slice(0,LEARN_CHUNK);
  go('q',{back:'set',id:s.id,Q:{kind:'learn',items,session:items.slice(),failed:new Set(),done:0,cur:null}})}
 function startReview(items,back,id){
  go('q',{back,id,Q:{kind:'review',items:shuffle(items.slice()),session:items.slice(),failed:new Set(),done:0,cur:null}})}
@@ -113,7 +114,8 @@ function vQ(){
   if(learn){
    app.innerHTML=bar(view.back,backTitle)+`<section class="summary"><h1>${Q.session.length?`Alle ${Q.session.length} Begriffe sitzen`:'Hier gibt es nichts Neues'}</h1>
    <p class="muted">${Q.session.length?'Jeder Begriff ist jetzt im Wiederholplan und kommt morgen das erste Mal wieder.':'Alle Karten sind schon im Wiederholplan. Fällige Begriffe übst du mit „Wiederholen“.'}</p>
-   <div class="stack"><button class="btn primary wide" data-act="mode" data-m="test">Jetzt testen</button><button class="btn wide" data-act="learn-reset">Alles von vorn lernen</button></div></section>`;
+   ${(()=>{const s=getSet(view.id),rest=s?pool(s).filter(c=>c.lv<1).length:0;return rest&&Q.session.length?`<p class="muted">Im Set warten noch ${rest} neue Begriffe. Gönn dir ruhig erst eine Pause – kleine Portionen bleiben besser hängen.</p>`:''})()}
+   <div class="stack">${(()=>{const s=getSet(view.id),rest=s?pool(s).filter(c=>c.lv<1).length:0;return rest&&Q.session.length?`<button class="btn primary wide" data-act="learn-more">Nächste ${Math.min(rest,LEARN_CHUNK)} lernen</button><button class="btn wide" data-act="mode" data-m="test">Jetzt testen</button>`:'<button class="btn primary wide" data-act="mode" data-m="test">Jetzt testen</button>'})()}<button class="btn wide" data-act="learn-reset">Alles von vorn lernen</button></div></section>`;
   }else if(Q.kind==='watch'){vWatchDone(Q)}else{
    const dues=Q.session.map(it=>card(getSet(it.sid),it.cid)).filter(Boolean).map(c=>c.due);
    const next=allDue().length?0:Math.min(...db.sets.flatMap(s=>s.cards.filter(c=>c.lv>=1).map(c=>c.due)),Infinity);
@@ -124,7 +126,7 @@ function vQ(){
   }
   return}
  if(!Q.cur){const it=Q.items[0],s=getSet(it.sid),c=card(s,it.cid);if(!c){Q.items.shift();return render()}
-  Q.cur=it;Q.type=(learn||(Q.kind==='watch'&&it.isNew))&&(c.m||0)===0&&s.cards.length>=2?'mc':'write';Q.opts=Q.type==='mc'?options(s,c,prefs.dir):null;Q.res=null;Q.editing=false;Q.speaking=false}
+  Q.cur=it;Q.type=(learn||(Q.kind==='watch'&&it.isNew))&&(c.m||0)===0&&s.cards.length>=2?'mc':'write';Q.opts=Q.type==='mc'?options(s,c,prefs.dir):null;Q.res=null;Q.editing=false;Q.speaking=false;Q.help={lv:0}}
  const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid),{prompt,answer,askLang,ansLang}=dirOf(s,c);
  const prog=learn?Q.session.filter(it=>{const x=card(getSet(it.sid),it.cid);return x&&x.lv>=1}).length:Q.done;
  const r=Q.res;
@@ -134,12 +136,12 @@ function vQ(){
    return `<button class="opt ${cl}" data-act="q-opt" data-i="${i}" ${r?'disabled':''}><span class="n">${i+1}</span><span>${esc(o)}</span></button>`}).join('')}</div>`;
  }else{
   body=`<p class="label">Schreib es auf ${langName(ansLang)}</p><form class="write" id="q-form" autocomplete="off"><input id="q-in" lang="${short(ansLang)}" value="${esc(r?r.input:'')}" ${r?'disabled':''} autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Deine Antwort" placeholder="Antwort eingeben">${r?'':micBtn('q-in',ansLang)}<button class="btn primary" ${r?'disabled':''}>Prüfen</button></form>
-  ${r?'':`<div class="row-between"><button class="linkbtn" data-act="q-idk">Weiß ich nicht</button></div>${dictHint}`}`;
+  ${r?'':`${helpHtml(Q.help||{},'q-help',ansLang)}<div class="row-between"><button class="linkbtn" data-act="q-idk">Weiß ich nicht</button></div>${dictHint}`}`;
  }
  let fb='';
  if(r){
   const ex=c.ex?`<span class="ex">${esc(c.ex)}</span>`:'';
-  fb=r.ok?`<div class="fb ok"><div class="row-between"><strong>${r.hint?'Fast genau richtig':'Richtig'}</strong>${sayBtn(answer,ansLang)}</div><span>Antwort: <span class="ans">${esc(answer)}</span></span>${ex}</div>`
+  fb=r.helped?`<div class="fb no"><div class="row-between"><strong>Mit Lösungshilfe</strong>${sayBtn(answer,ansLang)}</div><span>Richtig ist: <span class="ans">${esc(answer)}</span></span><span class="muted">Zählt nicht als gewusst – der Begriff kommt bald wieder.</span>${ex}</div>`:r.ok?`<div class="fb ok"><div class="row-between"><strong>${r.hint?'Fast genau richtig':'Richtig'}</strong>${sayBtn(answer,ansLang)}</div><span>Antwort: <span class="ans">${esc(answer)}</span></span>${ex}</div>`
    :`<div class="fb no"><div class="row-between"><strong>${r.idk?'Kein Problem, merk dir:':'Noch nicht'}</strong>${sayBtn(answer,ansLang)}</div><span>Richtig ist: <span class="ans">${esc(answer)}</span></span>${r.input&&!r.idk?`<span class="muted">Deine Antwort: ${esc(r.input)}</span>`:''}${ex}</div>`;
   if(Q.editing){
    fb+=`<form class="inline-edit" id="q-edit" autocomplete="off"><span class="label">Karte korrigieren</span>

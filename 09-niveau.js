@@ -110,24 +110,33 @@ function vCheck(){const K=view.K,lang=view.lang,TL=langName(lang),U=view.uref,UU
 /* ---------- Gezieltes Training ---------- */
 function startDrill(lang,k){if(!prof(lang).weak[k])return toast('Dieses Thema gibt es nicht mehr');go('drill',{lang,D:{k,stage:'load',data:null,i:0,res:null,ok:0,err:''}});drillLoad()}
 function startDrillTopic(lang,topic,uref){go('drill',{lang,uref,D:{k:null,topic,stage:'load',data:null,i:0,res:null,ok:0,err:''}});drillLoad()}
-async function drillLoad(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''},TL=langName(lang);D.stage='load';D.err='';render();
+async function drillLoad(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''},TL=langName(lang),voc=w.cat==='v';D.stage='load';D.err='';render();
  adoptLevel(lang);
  try{const r=await ai(`Erstelle eine kurze Übungseinheit für einen deutschsprachigen Lerner (Niveau ${prefs.level}) in ${TL} zum Thema „${w.topic}“.${w.desc?` Beobachtetes Problem: ${w.desc}`:''}${w.ex?` Richtiges Beispiel: ${w.ex}`:''}
 Antworte nur mit JSON:
 {"regel":"Erklärung der Regel auf Deutsch, höchstens 4 kurze Sätze","beispiele":["2 bis 3 Beispielsätze auf ${TL}"],"aufgaben":[…]}
 Genau 8 Aufgaben, gemischt aus zwei Typen und von leicht nach schwer:
 {"typ":"mc","frage":"Satz auf ${TL} mit ___","opts":["…","…","…","…"],"a":Index der richtigen Antwort,"erkl":"kurze Erklärung auf Deutsch"}
-{"typ":"luecke","frage":"Satz auf ${TL} mit einer oder mehreren Lücken ___","hinweis":"Grundformen in Klammern oder deutscher Hinweis, bei mehreren Lücken in derselben Reihenfolge","loesungen":[["alle richtigen Formen für Lücke 1"],["alle richtigen Formen für Lücke 2, nur falls es sie gibt"]],"erkl":"kurze Erklärung auf Deutsch"}
-„loesungen“ enthält für jede Lücke ___ genau eine Liste, in der Reihenfolge der Lücken im Satz.`,{json:true,fresh:true,cacheKey:`drill|${lang}|${wkey(w.topic||'')}|${prefs.level}`});
+{"typ":"luecke","frage":"Satz auf ${TL} mit einer oder mehreren Lücken ___","hinweis":"${voc?'deutsche Bedeutung des gesuchten Wortes, bei mehreren Lücken in derselben Reihenfolge':'Grundform in Klammern, die der Lerner verändern muss, oder deutscher Hinweis, bei mehreren Lücken in derselben Reihenfolge'}","loesungen":[["alle richtigen Formen für Lücke 1"],["alle richtigen Formen für Lücke 2, nur falls es sie gibt"]],"erkl":"kurze Erklärung auf Deutsch"}
+„loesungen“ enthält für jede Lücke ___ genau eine Liste, in der Reihenfolge der Lücken im Satz.
+Wichtig für Lückenaufgaben: Die Lösung darf NIE wörtlich im Satz oder im Hinweis stehen. Wenn die Lösung genau das Wort in Klammern wäre (z. B. „(believe)“ → „believe“), ist die Aufgabe wertlos – dann ändere sie so, dass eine echte Umformung nötig ist (Zeitform, Person, Steigerung, Wortart …) oder gib stattdessen die deutsche Bedeutung als Hinweis. Schreibe nie „Setze … in der Grundform ein“. ${voc?`Das Thema ist Wortschatz: Gefragt ist das passende Wort auf ${TL}, der Hinweis ist seine deutsche Bedeutung, z. B. „(glauben)“.`:'Das Thema ist Grammatik: Die Lücken prüfen genau diese Regel.'}`,{json:true,fresh:true,cacheKey:`drill2|${lang}|${wkey(w.topic||'')}|${prefs.level}`});
   const tasks=(Array.isArray(r&&r.aufgaben)?r.aufgaben:[]).map(t=>{if(!t||!t.frage)return null;
    if(t.typ==='mc'&&Array.isArray(t.opts)&&+t.a>=0&&+t.a<t.opts.length){const right=String(t.opts[+t.a]);const opts=shuffle([...new Set(t.opts.map(String))]);return {typ:'mc',frage:String(t.frage),opts,a:opts.indexOf(right),erkl:String(t.erkl||'')}}
    const gaps=gapSolutions(String(t.frage),t.loesungen!=null?t.loesungen:(t.loesung||t.antwort));if(!gaps)return null;
+   if(trivialGaps(String(t.frage),String(t.hinweis||''),gaps))return null;
    return {typ:'luecke',frage:String(t.frage),hinweis:String(t.hinweis||''),gaps,sol:gaps[0],erkl:String(t.erkl||'')}}).filter(Boolean);
   if(tasks.length<3)throw new AIError('Die Übung konnte nicht erstellt werden. Versuch es nochmal.');
   D.data={regel:String(r.regel||''),beispiele:(Array.isArray(r.beispiele)?r.beispiele:[]).map(String),tasks};D.stage='rule';D.i=0;D.ok=0;D.res=null}
  catch(e){D.err=e.message}
  if(view.D===D)render()}
 const fillGap=(f,a)=>/_{2,}/.test(f)?f.replace(/_{2,}/,a):f;
+// Eine Lücke ist wertlos, wenn ihre Lösung schon wörtlich als Hinweis dasteht – z. B. „___ (believe)“ → „believe“
+const gapNorm=s=>String(s).toLowerCase().replace(/[’']/g,"'").replace(/[^\p{L}\p{N}' ]+/gu,' ').replace(/\s+/g,' ').trim();
+function trivialGaps(frage,hinweis,gaps){const given=new Set();
+ for(const m of (frage+' '+hinweis).matchAll(/\(([^()]*)\)/g))for(const part of m[1].split(/[,;/|]|\s+[-–→]\s+/)){const n=gapNorm(part);if(n)given.add(n)}
+ const hn=gapNorm(hinweis);if(hn&&hn.split(' ').length<=3)given.add(hn);
+ if(!given.size)return false;
+ return gaps.some(g=>g.length&&g.every(s=>given.has(gapNorm(s))))}
 // Mehrere Lücken: jede Lücke bekommt ihre eigene Liste richtiger Formen
 const gapCount=f=>(String(f).match(/_{2,}/g)||[]).length;
 function gapSolutions(frage,raw){const n=Math.max(1,gapCount(frage));const S=x=>(Array.isArray(x)?x:[x]).filter(v=>v!=null&&String(v).trim()).map(v=>String(v).trim());
@@ -139,24 +148,24 @@ function gapSolutions(frage,raw){const n=Math.max(1,gapCount(frage));const S=x=>
  return null}
 const fillAll=(f,answers)=>{let i=0;return String(f).replace(/_{2,}/g,m=>answers[i]!=null?answers[i++]:m)};
 function gapSentence(t,D){const parts=String(t.frage).split(/_{2,}/),r=D.res;let h='';
- parts.forEach((p,j)=>{h+=esc(p);if(j>=parts.length-1)return;const g=(D.gres||[])[j];
-  if(g)h+=g.ok?`<span class="gap ok">${esc(g.input)}</span>`:`<span class="gap no"><s>${esc(g.input)}</s> ${esc(t.gaps[j][0])}</span>`;
+ parts.forEach((p,j)=>{h+=tapText(p,view.lang,{ctx:t.frage,ex:fillAll(t.frage,t.gaps.map(g=>g[0]))});if(j>=parts.length-1)return;const g=(D.gres||[])[j];
+  if(g)h+=g.helped?`<span class="gap help">${esc(t.gaps[j][0])}</span>`:g.ok?`<span class="gap ok">${esc(g.input)}</span>`:`<span class="gap no"><s>${esc(g.input)}</s> ${esc(t.gaps[j][0])}</span>`;
   else if(!r&&j===(D.g||0))h+=`<span class="gap cur" aria-label="Lücke ${j+1}">${t.gaps.length>1?j+1:'?'}</span>`;
   else h+='<span class="gap">___</span>'});
  return h}
 function vDrill(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''},TL=lang;let h=bar(view.uref?'unit':'home','Training');
  h+=`<h1>${esc(w.topic)}</h1>`;
  if(D.stage==='load'){h+=D.err?errHtml(D.err)+'<button class="btn" data-act="dr-reload">Nochmal versuchen</button>':`<p class="thinking">${aiName()} stellt deine Übung zusammen …</p>`}
- else if(D.stage==='rule'){const d=D.data;h+=`<section class="rule"><span class="label">So geht's</span><p>${esc(d.regel)}</p>${d.beispiele.length?`<ul lang="${short(TL)}">${d.beispiele.map(b=>`<li>${esc(b)} ${sayBtn(b,TL)}</li>`).join('')}</ul>`:''}</section>
+ else if(D.stage==='rule'){const d=D.data;h+=`<section class="rule"><span class="label">So geht's</span><p>${esc(d.regel)}</p>${d.beispiele.length?`<ul lang="${short(TL)}">${d.beispiele.map(b=>`<li>${tapText(b,TL)} ${sayBtn(b,TL)}</li>`).join('')}</ul>`:''}</section>
   <button class="btn primary wide" data-act="dr-start">${d.tasks.length} Aufgaben starten</button>`}
  else if(D.stage==='task'){const t=D.data.tasks[D.i],r=D.res;const answer=t.typ==='mc'?t.opts[t.a]:t.sol[0];const fullSent=t.typ==='luecke'?fillAll(t.frage,t.gaps.map(g=>g[0])):fillGap(t.frage,answer);
   h+=`<div class="prog"><span>${D.i+1} / ${D.data.tasks.length}</span><div class="pbar"><i style="width:${D.i/D.data.tasks.length*100}%"></i></div></div>
-  <section class="q"><div class="q-prompt"><div lang="${short(TL)}">${t.typ==='luecke'?gapSentence(t,D):esc(t.frage)}</div></div>${t.hinweis?`<p class="hint">Hinweis: ${esc(t.hinweis)}</p>`:''}`;
+  <section class="q"><div class="q-prompt"><div lang="${short(TL)}">${t.typ==='luecke'?gapSentence(t,D):tapText(t.frage,TL)}</div></div>${t.hinweis?`<p class="hint">Hinweis: ${esc(t.hinweis)}</p>`:''}`;
   if(t.typ==='mc')h+=`<div class="opts">${t.opts.map((o,j)=>{let cl='';if(r){if(j===t.a)cl='ok';else if(j===r.pick)cl='no'}return `<button class="opt ${cl}" data-act="dr-opt" data-j="${j}" ${r?'disabled':''}><span class="n">${j+1}</span><span>${esc(o)}</span></button>`}).join('')}</div>`;
-  else{const multi=t.gaps.length>1,gi=D.g||0;h+=`${multi&&!r?`<p class="label">Lücke ${gi+1} von ${t.gaps.length}</p>`:''}${r&&multi?'':`<form class="write" id="dr-form" autocomplete="off"><input id="dr-in" lang="${short(TL)}" value="${esc(r?r.input:'')}" ${r?'disabled':''} autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${multi?`Lücke ${gi+1} ausfüllen`:'Lücke ausfüllen'}" aria-label="${multi?`Lücke ${gi+1} von ${t.gaps.length}`:'Deine Antwort'}">${r?'':micBtn('dr-in',TL)}<button class="btn primary" ${r?'disabled':''}>${multi&&gi<t.gaps.length-1?'Bestätigen':'Prüfen'}</button></form>`}`}
-  if(r){const full=fullSent;h+=`<div class="fb ${r.ok?'ok':'no'}"><div class="row-between"><strong>${r.ok?'Richtig':'Noch nicht'}</strong>${sayBtn(full,TL)}</div><span class="ans" lang="${short(TL)}">${esc(full)}</span>${t.erkl?`<span>${esc(t.erkl)}</span>`:''}</div>
-   <div class="row-between">${!r.ok&&t.typ==='luecke'&&r.input?'<button class="linkbtn" data-act="dr-override">Ich lag doch richtig</button>':'<span></span>'}<button class="btn primary" id="dr-next" data-act="dr-next">Weiter</button></div>`}
-  h+=`</section>`}
+  else{const multi=t.gaps.length>1,gi=D.g||0;h+=`${multi&&!r?`<p class="label">Lücke ${gi+1} von ${t.gaps.length}</p>`:''}${r&&multi?'':`<form class="write" id="dr-form" autocomplete="off"><input id="dr-in" lang="${short(TL)}" value="${esc(r?r.input:'')}" ${r?'disabled':''} autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${multi?`Lücke ${gi+1} ausfüllen`:'Lücke ausfüllen'}" aria-label="${multi?`Lücke ${gi+1} von ${t.gaps.length}`:'Deine Antwort'}">${r?'':micBtn('dr-in',TL)}<button class="btn primary" ${r?'disabled':''}>${multi&&gi<t.gaps.length-1?'Bestätigen':'Prüfen'}</button></form>${r?'':helpHtml(D.help||{},'dr-help',TL)}`}`}
+  if(r){const full=fullSent;h+=`<div class="fb ${r.ok?'ok':'no'}"><div class="row-between"><strong>${r.ok?'Richtig':r.helped?'Mit Lösungshilfe':'Noch nicht'}</strong>${sayBtn(full,TL)}</div><span class="ans" lang="${short(TL)}">${tapText(full,TL)}</span>${r.helped?'<span class="muted">Mit Hilfe gelöste Lücken zählen nicht als gewusst.</span>':''}${t.erkl?`<span>${esc(t.erkl)}</span>`:''}</div>
+   <div class="row-between">${!r.ok&&!r.helped&&t.typ==='luecke'&&r.input?'<button class="linkbtn" data-act="dr-override">Ich lag doch richtig</button>':'<span></span>'}<button class="btn primary" id="dr-next" data-act="dr-next">Weiter</button></div>`}
+  h+=`${tapHint()}</section>`}
  else{const n=D.data.tasks.length,pct=D.ok/n;h+=`<section class="summary"><span class="label">Ergebnis</span><div class="clock" style="font-size:3rem">${D.ok} / ${n}</div>
   <p class="muted">${!D.k?(pct>=.8?'Gut gemacht. Der Schritt „Grammatik üben“ ist erledigt.':'Bleib dran. Mit neuen Aufgaben übst du das Thema noch einmal.'):D.fixedNow?'Stark! Das Thema gilt jetzt als gefestigt und verschwindet aus deinen Baustellen. Taucht der Fehler im Gespräch wieder auf, kommt es zurück.':pct>=.8?'Gut gemacht. Noch eine gute Runde, dann gilt das Thema als gefestigt.':'Bleib dran. Mit neuen Aufgaben übst du das Thema noch einmal.'}</p>
   <div class="stack">${view.focus?`<p class="hint" style="text-align:center">Heutiger Schwerpunkt: ${(db.focus&&db.focus[view.lang]&&db.focus[view.lang].rounds)||1}× geübt. Mehr geht immer, muss aber nicht.</p>`:''}<button class="btn ${view.uref&&pct>=.8?'':'primary'} wide" data-act="dr-reload">${view.focus?'Weiter am Schwerpunkt':'Neue Aufgaben zum Thema'}</button>${view.focus&&openWeak(view.lang).filter(w=>w.k!==D.k).length?'<button class="btn wide" data-act="focus-next">Nächste Baustelle</button>':''}${view.focus?'<button class="btn wide" data-act="back" data-to="home">Fertig für heute</button>':view.uref?`<button class="btn wide ${pct>=.8?'primary':''}" data-act="back" data-to="unit">Zurück zur Etappe</button>`:'<button class="btn wide" data-act="back" data-to="home">Zur Startseite</button>'}</div></section>`}
@@ -164,7 +173,7 @@ function vDrill(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{
  if(D.stage==='task'){if(D.res){const b=$('#dr-next');if(b)b.focus()}else if(D.data.tasks[D.i].typ==='luecke'){const i=$('#dr-in');if(i)i.focus()}}}
 function drillAnswer(res){const D=view.D;if(D.res)return;D.res=res;if(res.ok)D.ok++;logAnswer();
  if(prefs.auto){const t=D.data.tasks[D.i];speak(t.typ==='luecke'&&t.gaps?fillAll(t.frage,t.gaps.map(g=>g[0])):fillGap(t.frage,t.typ==='mc'?t.opts[t.a]:t.sol[0]),view.lang)}render()}
-function drillNext(){const D=view.D;D.i++;D.res=null;D.g=0;D.gres=[];
+function drillNext(){const D=view.D;D.i++;D.res=null;D.g=0;D.gres=[];D.help={lv:0};
  if(D.i>=D.data.tasks.length&&view.uref&&D.ok/D.data.tasks.length>=.8){const c=getCourse(view.uref.id),u=unitOf(c,view.uref.uid);if(u){u.drillOk=true;c.upd=now()}}
  if(D.i>=D.data.tasks.length){const w=D.k&&prof(view.lang).weak[D.k];if(view.focus&&db.focus&&db.focus[view.lang]&&db.focus[view.lang].k===D.k)db.focus[view.lang].rounds=(db.focus[view.lang].rounds||0)+1;if(w){w.tries=(w.tries||0)+1;w.tried=now();if(D.ok/D.data.tasks.length>=.8){w.ok=(w.ok||0)+1;if(w.ok>=2&&!w.fixed){w.fixed=true;D.fixedNow=true}}w.last=now()}save();D.stage='done'}
  render()}

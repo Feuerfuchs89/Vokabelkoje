@@ -254,6 +254,14 @@ legend{font-size:.8rem;font-weight:700;color:var(--muted);text-transform:upperca
 .w.sel{background:var(--accent);color:var(--accent-ink)}
 .lookup{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);border:2px solid var(--accent);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 14px 30px -16px rgba(8,28,44,.6)}
 .lk-word{font-family:var(--f-display);font-weight:700;font-size:1.35rem;overflow-wrap:anywhere;min-width:0}
+.tw{cursor:pointer;border-radius:4px;-webkit-tap-highlight-color:transparent}.tw:hover{background:var(--soft)}.tw.sel{background:var(--soft);box-shadow:0 2px 0 var(--accent)}
+#lupe-box{position:fixed;left:0;right:0;bottom:0;z-index:70;padding:0 12px calc(12px + env(safe-area-inset-bottom,0px));pointer-events:none}
+.lupe{pointer-events:auto;max-width:560px;margin:0 auto;background:var(--surface);border:2px solid var(--accent);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 14px 34px -14px rgba(8,28,44,.65);animation:pop .2s ease-out}
+.lupe .lupe-sent{font-style:italic}
+.lupe-add{display:flex;gap:8px;align-items:center}.lupe-add select{flex:1;min-width:0}
+.tap-hint{font-size:.8rem;color:var(--muted);margin:6px 0 0}
+body.lupe-open{padding-bottom:240px}
+.good-text{color:var(--good);font-weight:700}
 .thinking{color:var(--muted);font-style:italic}
 /* Gespräch */
 .chat{display:flex;flex-direction:column;gap:10px}
@@ -401,6 +409,12 @@ legend{font-size:.8rem;font-weight:700;color:var(--muted);text-transform:upperca
 .gap.cur{border:2px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:800;background:var(--soft);animation:pop .3s ease-out}
 .gap.ok{color:var(--good);border-bottom-color:var(--good);font-weight:700}
 .gap.no{color:var(--good);border-bottom-color:var(--bad);font-weight:700}.gap.no s{color:var(--bad);font-weight:400}
+.gap.help{color:var(--muted);border-bottom-color:var(--signal);font-weight:700}
+.helpbox{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:10px}
+.scr{display:flex;flex-wrap:wrap;gap:4px 12px}.scr .w{display:inline-flex;flex-wrap:wrap;gap:3px;max-width:100%}
+.scr .w i{font-style:normal;font-weight:800;min-width:1.55em;height:1.9em;display:inline-grid;place-items:center;border:1px solid var(--line);border-bottom-width:3px;border-radius:7px;background:var(--card);color:var(--ink);animation:pop .25s ease-out}
+.scr.sol .w i{border-color:var(--signal);color:var(--accent)}
+.helpnote{font-size:.85rem;color:var(--muted)}
 .talk-card .talk-ico{font-size:2rem;line-height:1}
 .photo-res{display:grid;grid-template-columns:minmax(0,120px) minmax(0,1fr);gap:12px;align-items:start}.photo-res img{width:100%;border-radius:12px;border:1px solid var(--line)}
 @media (max-width:420px){.photo-res{grid-template-columns:1fr}.photo-res img{max-height:220px;object-fit:cover}}
@@ -514,6 +528,7 @@ legend{font-size:.8rem;font-weight:700;color:var(--muted);text-transform:upperca
 .banner{display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:var(--r);background:color-mix(in srgb,var(--accent) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
 .banner.warn{background:color-mix(in srgb,var(--signal) 12%,var(--surface));border-color:color-mix(in srgb,var(--signal) 45%,var(--line))}
 .banner .btn{align-self:flex-start}
+a.btn{text-decoration:none;text-align:center;justify-content:center;box-sizing:border-box}a.btn:not(.primary){color:var(--ink)}
 .welcome{display:flex;flex-direction:column;gap:16px;padding-top:12px}
 .w-steps{display:flex;gap:6px}.w-steps i{flex:1;height:5px;border-radius:99px;background:var(--soft)}.w-steps i.on{background:var(--accent)}
 .w-gull{display:grid;place-items:center}

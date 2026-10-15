@@ -35,6 +35,50 @@ Antworte nur mit einem JSON-Array: [{"i":Nummer,"ex":"Satz"}]
 
 /* ---------- Lese-Lupe ---------- */
 const WORD_RE=/([\p{L}\p{M}][\p{L}\p{M}'’\-]*)/u;
+/* ---------- Wort-Lupe überall: Wort antippen → Übersetzung passend zum Satz → ins Set ---------- */
+let LUPE=null,lupeEl=null;const LUPEC={};
+// Fremdsprachigen Text antippbar machen. o.ctx: ganzer Satz als Zusammenhang (wenn text nur ein Stück ist)
+function tapText(text,lang,o={}){text=String(text==null?'':text);if(!lang||lang==='de-DE'||!aiOK()||!text.trim())return esc(text);
+ const k=TAPS.push({text,lang,ctx:o.ctx||'',ex:o.ex||''})-1;
+ return text.split(WORD_RE).map((t,i)=>i%2?`<span class="tw" data-act="tw" data-k="${k}" data-i="${i}">${esc(t)}</span>`:esc(t)).join('')}
+const tapHint=()=>aiOK()?'<p class="tap-hint">Wörter im Text antippen: nachschlagen und sammeln.</p>':'';
+function lupeBox(){if(!lupeEl){lupeEl=document.createElement('div');lupeEl.id='lupe-box';document.body.appendChild(lupeEl);
+  lupeEl.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-act]');if(!b||b.disabled)return;const f=acts[b.dataset.act];if(f){e.preventDefault();f(b,e)}})}
+ return lupeEl}
+function lupeClose(){LUPE=null;if(lupeEl)lupeEl.innerHTML='';try{document.body.classList.remove('lupe-open')}catch(e){}try{document.querySelectorAll('.tw.sel').forEach(x=>x.classList.remove('sel'))}catch(e){}}
+function lupeSets(lang){return db.sets.filter(s=>!s.course&&targetLang(s)===lang)}
+function lupeRender(){const L=LUPE,box=lupeBox();try{document.body.classList.toggle('lupe-open',!!L)}catch(e){}if(!L){box.innerHTML='';return}
+ const inf=L.info,word=inf?inf.t:L.w,sets=lupeSets(L.lang),pref=(prefs.lupeSet||{})[L.lang],talk=sets.find(s=>s.talk);
+ const cur=sets.some(s=>s.id===pref)?pref:talk?talk.id:'__talk';
+ const opts=(talk?[]:[`<option value="__talk" ${cur==='__talk'?'selected':''}>Gesammelte Wörter (neu)</option>`]).concat(sets.map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${esc(s.title)}</option>`)).join('');
+ box.innerHTML=`<section class="lupe" role="dialog" aria-label="Wort nachschlagen" aria-live="polite"><div class="row-between"><span class="lk-word" lang="${short(L.lang)}">${esc(word)}</span><span style="display:flex;gap:6px;align-items:center">${sayBtn(word,L.lang)}<button class="del" data-act="lupe-close" aria-label="Schließen">×</button></span></div>
+ ${L.busy?'<p class="thinking">Schlage nach …</p>':L.err?errHtml(L.err)+'<button class="btn sm" data-act="lupe-retry">Nochmal</button>':inf?`<p><b>${esc(inf.d)}</b></p>${inf.note?`<p class="hint">${esc(inf.note)}</p>`:''}${L.sent&&L.sent.toLowerCase()!==L.w.toLowerCase()?`<p class="hint lupe-sent" lang="${short(L.lang)}">„${esc(L.sent.length>140?L.sent.slice(0,140)+' …':L.sent)}“</p>`:''}
+ ${L.added?`<p class="good-text">${L.added.n?`✓ Gespeichert in „${esc(L.added.title)}“`:`Steht schon in „${esc(L.added.title)}“`}</p>`:`<div class="lupe-add"><select id="lupe-set" aria-label="In welches Set?">${opts}</select><button class="btn primary sm" data-act="lupe-add">+ ins Set</button></div>`}`:''}</section>`}
+function lupeOpen(k,i,el){const T=TAPS[+k];if(!T)return;const toks=T.text.split(WORD_RE),w=toks[+i];if(!w)return;
+ const sent=(T.ctx||sentenceAt(toks,+i)).replace(/\s+/g,' ').trim();
+ try{document.querySelectorAll('.tw.sel').forEach(x=>x.classList.remove('sel'));if(el&&el.classList)el.classList.add('sel')}catch(e){}
+ LUPE={w,sent,ex:(T.ex||sent).replace(/\s+/g,' ').trim(),lang:T.lang,key:T.lang+'|'+w.toLowerCase()+'|'+sent.toLowerCase().slice(0,240),info:null,busy:false,err:'',added:null};
+ try{speak(w,T.lang)}catch(e){}
+ lupeLookup()}
+async function lupeLookup(force){const L=LUPE;if(!L)return;if(LUPEC[L.key]&&!force){L.info=LUPEC[L.key];return lupeRender()}
+ L.busy=true;L.err='';lupeRender();const TL=langName(L.lang);
+ try{const r=await ai(`Ein deutschsprachiger Lerner liest einen Text auf ${TL} und tippt auf das Wort „${L.w}“.
+Satz: „${L.sent.slice(0,600)}“
+Antworte nur mit JSON: {"t":"Grundform auf ${TL} (Substantiv mit Artikel, Verb im Infinitiv)","d":"Übersetzung auf Deutsch, passend zu diesem Satz","note":"sehr kurzer Hinweis auf Deutsch zur Form im Satz, z. B. Vergangenheit oder Mehrzahl, sonst leer"}`,{json:true,quick:true,cacheKey:`tw|${L.key}`});
+  const info={t:String((r&&r.t)||L.w).trim(),d:String((r&&r.d)||'').trim(),note:String((r&&r.note)||'').trim()};
+  if(!info.d)throw new Error('Keine Übersetzung bekommen.');LUPEC[L.key]=info;L.info=info}
+ catch(e){L.err=e.message||'Nachschlagen hat nicht geklappt.'}
+ L.busy=false;if(LUPE===L)lupeRender()}
+function lupeAdd(){const L=LUPE;if(!L||!L.info||L.added)return;const sel=lupeEl&&lupeEl.querySelector('#lupe-set');const id=sel&&sel.value;
+ let s=id&&id!=='__talk'?getSet(id):null;if(!s||targetLang(s)!==L.lang)s=talkSet(L.lang);
+ prefs.lupeSet={...(prefs.lupeSet||{}),[L.lang]:s.id};savePrefs();
+ const S=L.ex||L.sent||'',ex=S&&S.length<=160&&!/_{2,}/.test(S)&&S.toLowerCase()!==L.w.toLowerCase()?S:'';
+ const n=addCards(s,[{t:L.info.t,d:L.info.d,ex}],true);L.added={title:s.title,n};save();lupeRender();if(view.name==='home')render()}
+// Heute gesammelte Wörter (Startseite)
+function gotCard(){const L=activeLang();if(!L||L==='de-DE')return '';const t0=new Date();t0.setHours(0,0,0,0);
+ const by=db.sets.filter(s=>targetLang(s)===L).map(s=>({s,n:s.cards.filter(c=>(c.got||0)>=+t0).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+ const n=by.reduce((a,x)=>a+x.n,0);if(!n)return '';const top=by[0].s;
+ return `<section class="note row-between" style="gap:10px"><span>📥 Heute ${n} ${n===1?'Wort':'Wörter'} gesammelt${by.length===1?` in „${esc(top.title)}“`:''}. Sie kommen nach und nach in deine Wachen.</span><button class="btn sm" data-act="open" data-id="${top.id}">Ansehen</button></section>`}
 function knownSet(s){const k=targetLang(s)===s.l1?'t':'d';const out=new Set();
  s.cards.forEach(c=>{const v=plain(norm(c[k]).replace(ART,''));out.add(v);v.split(' ').forEach(p=>{if(p.length>3)out.add(p)})});return out}
 function sentenceAt(toks,i){let a=i,b=i;const end=/[.!?…\n]/;while(a>0&&!end.test(toks[a-1]))a--;while(b<toks.length-1&&!end.test(toks[b]))b++;return toks.slice(a,b+1).join('').trim()}
@@ -100,7 +144,7 @@ function wordMatch(target,said){const T=String(target).split(/\s+/).filter(Boole
  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i][j]=tw[i]&&tw[i]===sw[j]?L[i+1][j+1]+1:Math.max(L[i+1][j],L[i][j+1]);
  const ok=new Array(n).fill(false);let i=0,j=0;while(i<n&&j<m){if(tw[i]&&tw[i]===sw[j]){ok[i]=true;i++;j++}else if(L[i+1][j]>=L[i][j+1])i++;else j++}
  tw.forEach((w,k)=>{if(!w)ok[k]=true});const hit=ok.filter(Boolean).length;return {words:T.map((w,k)=>({w,ok:ok[k]})),score:n?hit/n:0}}
-const wordLine=(M,L)=>`<p class="wm" lang="${short(L)}">${M.words.map(x=>`<span class="${x.ok?'ok':'no'}">${esc(x.w)}</span>`).join(' ')}</p>`;
+const wordLine=(M,L,ctx)=>`<p class="wm" lang="${short(L)}">${M.words.map(x=>`<span class="${x.ok?'ok':'no'}">${ctx?tapText(x.w,L,{ctx}):esc(x.w)}</span>`).join(' ')}</p>`;
 function practiceItems(s,max,short_){const L=targetLang(s),fwd=L===s.l1;
  const it=s.cards.map(c=>{const term=fwd?c.t:c.d,de=fwd?c.d:c.t,ex=(c.ex||'').trim();const useEx=ex&&!short_&&ex.length<=120;return {text:useEx?ex:term,de:useEx?'':de,cid:c.id}}).filter(x=>x.text&&x.text.length<=(short_?60:140));
  return shuffle(it).slice(0,max)}
@@ -113,7 +157,7 @@ function vDict(){const s=getSet(view.id),X=view.X,L=targetLang(s);let h=bar('set
  <section class="q"><p class="label">Hör zu und schreib auf, was du hörst</p>${voiceProblem(L)?`<p class="note">${esc(voiceProblem(L))}</p>`:''}
  <div class="btn-row"><button class="btn primary" data-act="dc-say">${ICON.say} Nochmal hören</button><button class="btn" data-act="dc-slow">Langsam</button></div>
  ${r?'':`<form class="write" id="dc-form" autocomplete="off"><input id="dc-in" lang="${short(L)}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Was hast du gehört?" aria-label="Was hast du gehört?"><button class="btn primary">Prüfen</button></form><button class="linkbtn" data-act="dc-skip">Weiß ich nicht</button>`}
- ${r?`<div class="fb ${r.ok?'ok':'no'}"><strong>${r.ok?'Richtig gehört':Math.round(r.M.score*100)+' % getroffen'}</strong>${wordLine(r.M,L)}${r.input?`<span class="hint">Du: ${esc(r.input)}</span>`:''}${it.de?`<span class="hint">${esc(it.de)}</span>`:''}</div><div class="row-between"><span></span><button class="btn primary" id="dc-next" data-act="dc-next">Weiter</button></div>`:''}</section>`;
+ ${r?`<div class="fb ${r.ok?'ok':'no'}"><strong>${r.ok?'Richtig gehört':Math.round(r.M.score*100)+' % getroffen'}</strong>${wordLine(r.M,L,it.text)}${r.input?`<span class="hint">Du: ${esc(r.input)}</span>`:''}${it.de?`<span class="hint">${esc(it.de)}</span>`:''}</div><div class="row-between"><span></span><button class="btn primary" id="dc-next" data-act="dc-next">Weiter</button></div>`:''}</section>`;
  app.innerHTML=h;if(!r){const i=$('#dc-in');if(i&&i.focus)i.focus()}else{const b=$('#dc-next');if(b&&b.focus)b.focus()}}
 function dictCheck(input){const X=view.X,it=X.items[X.i];const M=wordMatch(it.text,input||'');const ok=M.score>=.999||(M.score>=.85&&dWords(it.text).length>=5);X.res={M,ok,input};if(ok)X.ok++;logAnswer();render()}
 function startPron(s){if(!MIC_OK)return toast('Spracherkennung gibt es in diesem Browser nicht');const items=practiceItems(s,10,true);if(!items.length)return toast('Dieses Set hat noch keine Karten');go('pron',{id:s.id,X:{items,i:0,res:null,ok:0,tries:0}})}
@@ -214,8 +258,8 @@ function vTalk(){const s=getSet(view.id),C=view.C,TL=targetLang(s);let h=bar(s.t
   const n=Math.min(talkMine(C),C.max);
   h+=`<div class="row-between"><h1>${esc(C.custom.trim()||C.scn)}</h1><span class="pill">${esc(prefs.level)}</span></div>
   <div class="talk-prog" role="progressbar" aria-valuemin="0" aria-valuemax="${C.max}" aria-valuenow="${n}" aria-label="Deine Nachrichten"><span>Deine Nachrichten: ${n} von ${C.max}</span><div class="dots">${Array.from({length:C.max},(_,i)=>`<i class="${i<n?'on':''}"></i>`).join('')}</div></div>
-  <div class="chat">${C.turns.map(t=>t.role==='user'?`<div class="bub me">${esc(t.content)}</div>`:`<div class="bub ai" lang="${short(TL)}"><div class="bub-head"><span>${esc(t.content)}</span>${sayBtn(t.content,TL)}</div>${t.de?`<details><summary>Übersetzung</summary><span class="tr">${esc(t.de)}</span></details>`:''}</div>`).join('')}
-  ${C.busy?'<div class="bub ai thinking">schreibt …</div>':''}</div>
+  <div class="chat">${C.turns.map(t=>t.role==='user'?`<div class="bub me">${esc(t.content)}</div>`:`<div class="bub ai" lang="${short(TL)}"><div class="bub-head"><span>${tapText(t.content,TL)}</span>${sayBtn(t.content,TL)}</div>${t.de?`<details><summary>Übersetzung</summary><span class="tr">${esc(t.de)}</span></details>`:''}</div>`).join('')}
+  ${C.busy?'<div class="bub ai thinking">schreibt …</div>':''}</div>${C.turns.length<3?tapHint():''}
   ${talkOver(C)&&!C.busy?`<div class="talk-done"><div class="w-gull">${gullSVG('cheer',72,'')}</div><div><b>Gespräch geschafft!</b><span class="hint">${C.max} Nachrichten auf ${langName(TL)}. Jetzt schauen wir, was gut lief.</span></div></div>
   <div class="btn-row"><button class="btn primary wide" data-act="tk-end">Zur Auswertung</button></div>`:`
   ${C.err?errHtml(C.err)+((!last||last.role==='user')?'<button class="btn sm" data-act="tk-retry">Nochmal versuchen</button>':''):''}

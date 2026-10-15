@@ -71,6 +71,10 @@ const acts={
  settings:()=>go('backup'),
  watch:()=>startWatch(),
  tab:b=>{lastTab=b.dataset.t;view.tab=b.dataset.t;view.scrolled=false;render();window.scrollTo(0,0)},
+ install:()=>doInstall(),
+ 'install-later':()=>{prefs.installHide=now();prefs.justPaired=0;savePrefs();render()},
+ 'pair-here':()=>{view.P.here=true;render()},
+ 'pair-copylink':async()=>{try{await navigator.clipboard.writeText(pairUrl());toast('Link kopiert')}catch(e){toast('Kopieren ging nicht')}},
  'ios-ok':()=>{prefs.iosHintAt=now();savePrefs();render()},
  'bk-later':()=>{prefs.backupSnooze=now()-11*DAY;savePrefs();render()},
  'w-pick':b=>{const i=document.getElementById('w-gull');if(i&&'value' in i)i.value=b.dataset.n;view.W.gull=b.dataset.n},
@@ -132,6 +136,13 @@ const acts={
  'dr-start':()=>{view.D.stage='task';view.D.i=0;view.D.ok=0;view.D.res=null;view.D.g=0;view.D.gres=[];render()},
  'dr-opt':b=>{const D=view.D,t=D.data.tasks[D.i],j=+b.dataset.j;drillAnswer({ok:j===t.a,pick:j})},
  'dr-next':()=>drillNext(),
+ 'dr-help':()=>{const D=view.D;if(!D||D.res)return;const t=D.data.tasks[D.i];if(!t||t.typ!=='luecke')return;D.help=D.help||{lv:0};helpStep(D.help,t.gaps[D.g||0][0])},
+ 'q-help':()=>{const Q=view.Q;if(!Q||Q.res||!Q.cur)return;const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);if(!c)return;Q.help=Q.help||{lv:0};helpStep(Q.help,dirOf(s,c).answer)},
+ tw:b=>lupeOpen(b.dataset.k,b.dataset.i,b),
+ 'lupe-close':()=>lupeClose(),
+ 'lupe-retry':()=>lupeLookup(true),
+ 'lupe-add':()=>lupeAdd(),
+ 'learn-more':()=>startLearn(getSet(view.id)),
  'dr-override':()=>{const D=view.D;if(D.res&&!D.res.ok){D.res.ok=true;D.ok++;(D.gres||[]).forEach(g=>g.ok=true)}drillNext()},
  'ai-photo':()=>$('#img-in').click(),
  'ai-photo-x':()=>{view.draft.aiImg=null;render()},
@@ -148,7 +159,7 @@ const acts={
  listen:()=>startListen(),
  'ls-lang':b=>{const A=view.A,inp=$('#ls-in');if(inp)A.text=inp.value;A.lang=b.dataset.l;A.res=null;A.err='';render()},
  'ls-tr':()=>listenTranslate(),'ls-cam':()=>{const i=$('#cam-in');if(i&&i.click)i.click()},
- 'ph-add':b=>{const A=view.A,x=A.items&&A.items[+b.dataset.i];if(!x||x.added)return;const n=addCards(talkSet(A.lang),[{t:x.t,d:x.d,ex:x.ex}]);x.added=true;save();toast(n?`„${x.t}“ ist jetzt in „Gesammelte Wörter“`:'Das Wort ist schon im Set');render()},
+ 'ph-add':b=>{const A=view.A,x=A.items&&A.items[+b.dataset.i];if(!x||x.added)return;const n=addCards(talkSet(A.lang),[{t:x.t,d:x.d,ex:x.ex}],true);x.added=true;save();toast(n?`„${x.t}“ ist jetzt in „Gesammelte Wörter“`:'Das Wort ist schon im Set');render()},
  'dc-say':()=>dictSay(false),'dc-slow':()=>dictSay(true),'dc-skip':()=>dictCheck(''),'dc-next':()=>{const X=view.X;X.i++;X.res=null;render();if(X.i<X.items.length)setTimeout(()=>dictSay(false),200)},
  'pr-rec':()=>pronRec(),'pr-next':()=>{const X=view.X;stopListen();X.i++;X.res=null;X.listening=false;render()},
  yarn:()=>startYarn(activeLang()),'yarn-new':()=>yarnGen(),'ls-add':()=>addTr(view.A.res,view.A.lang),
@@ -203,16 +214,16 @@ app.addEventListener('input',e=>{const el=e.target;
  if(view.name==='edit'){const d=view.draft;if(el.dataset.k)d[el.dataset.k]=el.type==='checkbox'?el.checked:el.value;else if(el.dataset.f)d.cards[+el.dataset.i][el.dataset.f]=el.value}});
 app.addEventListener('toggle',e=>{const d=e.target;if(view.name==='course'&&d&&d.dataset&&d.dataset.lv){view.openLv=view.openLv||{};view.openLv[d.dataset.lv]=d.open}},true);
 app.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;
- if(id==='q-form'&&!view.Q.res){const s=getSet(view.Q.cur.sid),c=card(s,view.Q.cur.cid),v=$('#q-in').value;if(!v.trim())return;const r=check(v,dirOf(s,c).answer);qAnswer({ok:r>0,hint:r===1,input:v})}
+ if(id==='q-form'&&!view.Q.res){const s=getSet(view.Q.cur.sid),c=card(s,view.Q.cur.cid),v=$('#q-in').value;if(!v.trim())return;const r=check(v,dirOf(s,c).answer),helped=(view.Q.help&&view.Q.help.lv)===2;qAnswer(helped?{ok:false,helped:true,input:v}:{ok:r>0,hint:r===1,input:v})}
  if(id==='q-edit'){const Q=view.Q,s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);const t=$('#qe-t').value.trim(),d=$('#qe-d').value.trim();if(!t||!d)return toast('Begriff und Definition dürfen nicht leer sein');
   const oldAns=dirOf(s,c).answer;c.t=t;c.d=d;c.ex=$('#qe-x').value.trim();s.upd=now();save();Q.editing=false;
   if(Q.type==='mc'){const newAns=dirOf(s,c).answer;Q.opts=Q.opts.map(o=>o===oldAns?newAns:o)}
   render();toast('Karte gespeichert')}
  if(id==='ts-form'&&view.T&&!view.T.submitted)testSubmit();
  if(id==='dr-form'&&view.D&&!view.D.res){const D=view.D,v=$('#dr-in').value;if(!v.trim())return;const t=D.data.tasks[D.i],gs=t.gaps||[t.sol],gi=D.g||0;
-  D.gres=D.gres||[];D.gres[gi]={input:v.trim(),ok:gs[gi].some(s=>check(v,s)>0)};
+  D.gres=D.gres||[];const helped=(D.help&&D.help.lv)===2;D.gres[gi]={input:v.trim(),ok:!helped&&gs[gi].some(s=>check(v,s)>0),helped};D.help={lv:0};
   if(gi<gs.length-1){D.g=gi+1;render();const i=$('#dr-in');if(i)i.focus();return}
-  drillAnswer({ok:D.gres.every(g=>g.ok),input:D.gres.map(g=>g.input).join(' … '),gaps:D.gres})}
+  drillAnswer({ok:D.gres.every(g=>g.ok),helped:D.gres.some(g=>g.helped),input:D.gres.map(g=>g.input).join(' … '),gaps:D.gres})}
  if(id==='gull-form'){const v=$('#gull-name').value.trim();if(!v)return toast('Gib deiner Möwe einen Namen');nameGull(v)}
  if(id==='me-form'){const g=$('#me-gull').value.trim(),y=$('#me-name').value.trim();if(!g)return toast('Die Möwe braucht einen Namen');db.me={...db.me,gull:g.slice(0,20),name:y.slice(0,24),upd:now()};const cp=curProf();if(cp&&y){cp.name=y.slice(0,24);cp.upd=now();saveProfs()}save();render();toast('Gespeichert')}
  if(id==='prof-form')saveProfForm();

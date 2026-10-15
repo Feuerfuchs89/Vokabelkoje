@@ -68,6 +68,12 @@ Auf dem Gerät, das schon eingerichtet ist: **Profil → Einstellungen und Siche
 1. Auf dem neuen Gerät den **QR-Code scannen** (oder den Link an dich selbst schicken und dort öffnen).
 2. Den **6-stelligen Code** eingeben, der auf dem ersten Gerät steht.
 3. Fertig: Gemini-Schlüssel, GitHub-Token, Stimmen- und Farbeinstellungen sind übernommen, der Lernstand wird geholt.
+4. Danach erscheint auf der Startseite **„Auf den Startbildschirm“** (Chrome) bzw. eine kurze Anleitung (Samsung Internet).
+
+**Welcher Browser?** Am besten den QR-Code mit der Kamera scannen, dann öffnet sich der Standard-Browser.
+Geht der Link in WhatsApp, Gmail oder Instagram auf, zeigt die Vokabelkoje **„In Chrome öffnen“** bzw.
+**„In Samsung Internet öffnen“**. Bitte dort verbinden, nicht im App-Browser – sonst bleiben die Schlüssel in der fremden App.
+Den Standard-Browser stellst du am Handy unter *Einstellungen → Apps → Standard-Apps → Browser-App* ein.
 
 Der Link ist mit dem Code verschlüsselt und gilt 30 Minuten. Link und Code nie zusammen weitergeben.
 Nur für die **eigenen** Geräte – Familienmitglieder richten ihre eigenen Schlüssel ein.

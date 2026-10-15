@@ -89,8 +89,8 @@ const aiName=()=>STANDALONE?'Gemini':'Claude';
 const levelSel=()=>`<label class="fld"><span>Niveau</span><select id="lvl" data-pref="level">${[['A1','A1 · Anfänger'],['A2','A2 · Grundlagen'],['B1','B1 · Mittelstufe'],['B2','B2 · gut'],['C1','C1 · sehr gut']].map(([v,l])=>`<option value="${v}" ${prefs.level===v?'selected':''}>${l}</option>`).join('')}</select></label>`;
 const targetLang=s=>s.l1!=='de-DE'?s.l1:s.l2;
 const nativeLang=s=>targetLang(s)===s.l1?s.l2:s.l1;
-function addCards(s,list){const fwd=targetLang(s)===s.l1;const key=c=>plain(norm(c.t))+'|'+plain(norm(c.d));const have=new Set(s.cards.map(key));let n=0;
- list.forEach(x=>{if(!x||!x.t||!x.d)return;const c={...blank(),t:String(fwd?x.t:x.d).trim(),d:String(fwd?x.d:x.t).trim(),ex:String(x.ex||'').trim()};const k=key(c);if(have.has(k))return;have.add(k);s.cards.push(c);n++});
+function addCards(s,list,mark){const fwd=targetLang(s)===s.l1;const key=c=>plain(norm(c.t))+'|'+plain(norm(c.d));const have=new Set(s.cards.map(key));let n=0;
+ list.forEach(x=>{if(!x||!x.t||!x.d)return;const c={...blank(),t:String(fwd?x.t:x.d).trim(),d:String(fwd?x.d:x.t).trim(),ex:String(x.ex||'').trim()};if(mark)c.got=now();const k=key(c);if(have.has(k))return;have.add(k);s.cards.push(c);n++});
  if(n){s.upd=now();db.fresh=false;save()}return n}
 
 /* ---------- Niveau-Profil je Sprache ---------- */

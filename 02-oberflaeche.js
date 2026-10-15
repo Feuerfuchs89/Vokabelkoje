@@ -4,9 +4,10 @@ let view={name:'home'}, timer=null, starOnly={};
 const getSet=id=>db.sets.find(s=>s.id===id);
 const card=(s,id)=>s&&s.cards.find(c=>c.id===id);
 const pool=s=>starOnly[s.id]?s.cards.filter(c=>c.star):s.cards;
-function go(name,p={}){if(name==='home'&&!p.tab)p.tab=lastTab;clearInterval(timer);if(typeof stopGull==='function')stopGull();timer=null;stopListen();if(view.H)view.H.stopped=true;releaseWake();stopSpeak();
+function go(name,p={}){if(typeof lupeClose==='function')lupeClose();if(name==='home'&&!p.tab)p.tab=lastTab;clearInterval(timer);if(typeof stopGull==='function')stopGull();timer=null;stopListen();if(view.H)view.H.stopped=true;releaseWake();stopSpeak();
  view={name,...p};render();window.scrollTo(0,0)}
-function render(){({home:vHome,set:vSet,edit:vEdit,flash:vFlash,q:vQ,test:vTest,match:vMatch,hands:vHands,voices:vVoices,listen:vListen,gull:vGull,pairOut:vPairOut,pairIn:vPairIn,dict:vDict,pron:vPron,backup:vBackup,reader:vReader,talk:vTalk,check:vCheck,drill:vDrill,courseNew:vCourseNew,course:vCourse,unit:vUnit,logbook:vLogbook,profiles:vProfiles,langPick:vLangPick,trophies:vTrophies,kid:vKid})[view.name]();if(view.name==='home'){hookChart();hookGull()}else stopGull();try{voiceNote(view.name==='kid'?kidLang():null)}catch(e){}if(view.name==='course')hookMap()}
+let TAPS=[];
+function render(){TAPS=[];({home:vHome,set:vSet,edit:vEdit,flash:vFlash,q:vQ,test:vTest,match:vMatch,hands:vHands,voices:vVoices,listen:vListen,gull:vGull,pairOut:vPairOut,pairIn:vPairIn,dict:vDict,pron:vPron,backup:vBackup,reader:vReader,talk:vTalk,check:vCheck,drill:vDrill,courseNew:vCourseNew,course:vCourse,unit:vUnit,logbook:vLogbook,profiles:vProfiles,langPick:vLangPick,trophies:vTrophies,kid:vKid})[view.name]();if(view.name==='home'){hookChart();hookGull()}else stopGull();try{voiceNote(view.name==='kid'?kidLang():null)}catch(e){}if(view.name==='course')hookMap()}
 let toastT;function toast(msg){if(!msg)return;const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
 let wake=null;async function keepAwake(){try{if(navigator.wakeLock&&!wake)wake=await navigator.wakeLock.request('screen')}catch(e){}}
 function releaseWake(){try{if(wake)wake.release()}catch(e){}wake=null}

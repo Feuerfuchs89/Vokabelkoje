@@ -3,8 +3,30 @@
 /* ---------- Datenschutz: Hinweise und Sicherung ---------- */
 const isIOS=()=>{try{return /iPad|iPhone|iPod/.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}catch(e){return false}};
 const isInstalled=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
+// In-App-Browser (WhatsApp, Gmail-WebView, Instagram …): dort lässt sich nichts installieren, und gespeicherte Daten bleiben dort hängen
+const UA=()=>{try{return navigator.userAgent||''}catch(e){return ''}};
+const isAndroid=()=>/Android/i.test(UA());
+const isSamsung=()=>/SamsungBrowser/i.test(UA());
+function inAppBrowser(){const u=UA();if(!u)return false;
+ if(/FBAN|FBAV|FB_IAB|Instagram|Line\/|Telegram|WhatsApp|Snapchat|LinkedInApp|MicroMessenger|GSA\/|Pinterest/i.test(u))return true;
+ if(isAndroid()&&/;\s*wv\)/.test(u))return true;
+ if(isIOS()&&!/Safari\//.test(u))return true;return false}
+// Android: Link gezielt in einem Browser öffnen (Intent-Link, der #-Teil mit dem Schlüsselpaket bleibt erhalten)
+function intentLink(url,pkg){const u=new URL(url);return `intent://${u.host}${u.pathname}${u.search}${u.hash}#Intent;scheme=${u.protocol.replace(':','')};${pkg?`package=${pkg};`:'action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;'}S.browser_fallback_url=${encodeURIComponent(url)};end`}
+let installEvt=null;
+if(typeof addEventListener==='function'){addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;try{if(view&&view.name==='home')render()}catch(x){}});
+ addEventListener('appinstalled',()=>{installEvt=null;prefs.installHide=now();savePrefs();toast('Installiert! Du findest die Vokabelkoje jetzt auf dem Startbildschirm.')})}
+async function doInstall(){const e=installEvt;if(!e)return;installEvt=null;try{e.prompt();const r=await e.userChoice;if(r&&r.outcome==='accepted'){prefs.installHide=now();savePrefs()}}catch(x){}render()}
+function installSteps(){if(isIOS())return 'In Safari unten auf „Teilen“ tippen, dann „Zum Home-Bildschirm“.';
+ if(isSamsung())return 'Unten auf das Menü ≡ tippen, dann „Seite hinzufügen zu“ → „Startbildschirm“.';
+ return 'Oben rechts auf ⋮ tippen, dann „App installieren“ oder „Zum Startbildschirm hinzufügen“.'}
+function installCard(){if(!STANDALONE||isInstalled()||inAppBrowser()||isIOS())return '';
+ if(now()-(prefs.installHide||0)<30*DAY)return '';
+ if(installEvt)return `<div class="banner" role="note"><b>Vokabelkoje als App</b><span>Leg sie auf den Startbildschirm – dann startet sie wie eine richtige App, ohne Browserleiste.</span><div class="btn-row"><button class="btn sm primary" data-act="install">Auf den Startbildschirm</button><button class="btn sm" data-act="install-later">Später</button></div></div>`;
+ if(prefs.justPaired&&now()-prefs.justPaired<2*DAY)return `<div class="banner" role="note"><b>Verbunden – jetzt noch auf den Startbildschirm</b><span>${installSteps()}</span><button class="btn sm" data-act="install-later">Erledigt</button></div>`;
+ return ''}
 function hasLearnData(){return db.sets.some(s=>s.cards.some(c=>c.lv>=1||c.m>0))||(db.courses||[]).length>0||slainList().length>0}
-function safetyBanner(){let h='';
+function safetyBanner(){let h=installCard();
  if(STANDALONE&&isIOS()&&!isInstalled()&&now()-(prefs.iosHintAt||0)>7*DAY)
   h+=`<div class="banner warn" role="note"><b>Wichtig fürs iPhone</b><span>Leg die App auf den Home-Bildschirm: unten auf „Teilen“ tippen, dann „Zum Home-Bildschirm“. Sonst kann Safari deine Daten nach 7 Tagen ohne Besuch löschen.</span><button class="btn sm" data-act="ios-ok">Verstanden</button></div>`;
  const last=Math.max(prefs.lastBackup||0,canSync()?prefs.lastSync||0:0);
@@ -30,7 +52,7 @@ function vHome(){
  const t=view.tab||lastTab||'today';lastTab=t;view.tab=t;const L=activeLang();
  let h=topbar();
  if(t==='today'){
-  h+=`${langBar()}${safetyBanner()}${deck()}${focusCard()}${freeTalkCard()}
+  h+=`${langBar()}${safetyBanner()}${deck()}${gotCard()}${focusCard()}${freeTalkCard()}
   ${langEmpty(L)?`<div class="note stack"><span>Für ${langName(L)} gibt es noch nichts.</span><div class="btn-row">${aiOK()?'<button class="btn sm primary" data-act="course-new">Lernpfad von null an</button>':''}<button class="btn sm" data-act="new">Eigenes Set anlegen</button></div></div>`:''}
   ${aiOK()?levelCard():''}`}
  else if(t==='map'){const c=activeCourse();

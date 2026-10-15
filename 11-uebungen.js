@@ -133,7 +133,7 @@ function listenPlay(slow){const A=view.A,inp=$('#ls-in'),txt=(inp&&inp.value||''
  // nach dem Übersetzen die Fassung in der Lernsprache vorlesen
  if(A.res&&txt===A.text){speak(A.res.fx,A.lang,null,slow);return}
  A.text=txt;A.res=null;speak(A.text,A.lang,null,slow);A.hist=[{t:A.text,l:A.lang},...A.hist.filter(x=>!(x.t===A.text&&x.l===A.lang))].slice(0,12);prefs.listenHist=A.hist;savePrefs();render()}
-function addTr(r,L){if(!r||r.added)return;const n=addCards(talkSet(L),[{t:r.card.t,d:r.card.d,ex:''}]);r.added=true;save();toast(n?`„${r.card.t}“ ist jetzt in „Gesammelte Wörter“`:'Das Wort ist schon im Set');render()}
+function addTr(r,L){if(!r||r.added)return;const n=addCards(talkSet(L),[{t:r.card.t,d:r.card.d,ex:''}],true);r.added=true;save();toast(n?`„${r.card.t}“ ist jetzt in „Gesammelte Wörter“`:'Das Wort ist schon im Set');render()}
 
 /* ---------- Schnack mit der Möwe ---------- */
 // Die Möwe spricht mit eigener Gemini-Stimme (wenn eingerichtet), Wörter weiter mit der gewählten Stimme
@@ -179,7 +179,7 @@ async function gullSend(text){const G=view.G,L=view.lang;if(G.busy)return;
 function vGull(){const G=view.G,L=view.lang,mine=G.turns.filter(t=>t.role==='user').length,last=G.turns[G.turns.length-1],over=mine>=GULL_MAX&&last&&last.role==='assistant';
  let h=bar('home',`Schnack mit ${gullName()}`)+`<section class="gull-chat-head"><div class="gc-gull">${gullSVG(over?'cheer':G.busy?'idle':G.mood,72,G.busy?'think':over?'salute':G.act)}</div><div style="flex:1;min-width:0"><b>${esc(gullName())}</b><span class="hint">plaudert auf ${langName(L)} · ${Math.min(mine,GULL_MAX)} von ${GULL_MAX}</span></div><button class="chip ${gullTalks()?'on':''}" data-act="gull-talk" aria-pressed="${gullTalks()}">${gullTalks()?'🔊 spricht':'🔇 stumm'}</button></section>
  <div class="chat">${G.turns.map((t,i)=>t.role==='user'?`<div class="bub me">${esc(t.content)}</div>${t.fix?`<div class="whisper" role="note"><span aria-hidden="true">🤫</span><span>Psst: <b lang="${short(L)}">${esc(t.fix.besser)}</b>${t.fix.du?` statt <s>${esc(t.fix.du)}</s>`:''}${t.fix.warum?` – ${esc(t.fix.warum)}`:''}</span></div>`:''}`
-  :`<div class="bub ai gull-bub" lang="${short(L)}"><div class="bub-head"><span>${esc(t.content)}</span>${sayBtn(t.content,L,true)}</div>${t.de?`<details><summary>Übersetzung</summary><span class="tr">${esc(t.de)}</span></details>`:''}${t.tr?trCard(t.tr,L,'g-add',i):''}</div>`).join('')}
+  :`<div class="bub ai gull-bub" lang="${short(L)}"><div class="bub-head"><span>${tapText(t.content,L)}</span>${sayBtn(t.content,L,true)}</div>${t.de?`<details><summary>Übersetzung</summary><span class="tr">${esc(t.de)}</span></details>`:''}${t.tr?trCard(t.tr,L,'g-add',i):''}</div>`).join('')}
   ${G.busy?'<div class="bub ai thinking">schreibt …</div>':''}</div>
  ${G.err?errHtml(G.err)+((!last||last.role==='user')?'<button class="btn sm" data-act="g-retry">Nochmal versuchen</button>':''):''}
  ${over?`${G.measured||G.newWeak?`<section class="panel gull-sum">${G.measured?`<p>${esc(gullName())} schätzt dich in diesem Schnack auf <b style="color:var(--s-gram)">${lvlName(G.measured.g)}</b> in Grammatik und <b style="color:var(--s-voc)">${lvlName(G.measured.v)}</b> im Wortschatz.</p><p class="hint">Fließt leicht in deine Lernkurve ein, so viel wie ein Etappen-Check.</p>`:''}${G.newWeak&&G.newWeak.length?`<p>Neue Baustelle${G.newWeak.length>1?'n':''}: <b>${G.newWeak.map(esc).join(', ')}</b>. Taucht ab jetzt in deiner Tagesübung auf.</p>`:''}</section>`:''}<div class="btn-row"><button class="btn primary" data-act="gull-chat">Nochmal schnacken</button><button class="btn" data-act="back" data-to="home">Zur Startseite</button></div>`
@@ -214,7 +214,7 @@ function vPairOut(){const P=view.P;let h=bar('backup','Neues Gerät verbinden')+
  if(P.err){app.innerHTML=h+errHtml(P.err)+'</div>';return}
  h+=`<p class="muted">Überträgt deinen ${prefs.gemKey?'Gemini-Schlüssel':''}${prefs.gemKey&&prefs.ghToken?' und ':''}${prefs.ghToken?'GitHub-Token (und damit deinen Lernstand)':''} auf dein anderes Gerät. Dort musst du nichts abtippen.</p>
  <section class="panel pair"><b>1. Auf dem neuen Gerät öffnen</b><div id="pair-qr" class="pair-qr" hidden></div>
-  <span class="hint">QR-Code mit der Kamera scannen – oder den Link an dich selbst schicken und dort öffnen.</span>
+  <span class="hint">Am besten den QR-Code mit der Kamera scannen – dann öffnet sich der Link gleich im Browser (Chrome oder Samsung Internet). Schickst du dir den Link per WhatsApp oder Mail und er geht in der App auf, bietet die Vokabelkoje einen Knopf „In Chrome öffnen“ an.</span>
   <div class="btn-row">${navigator.share?'<button class="btn" data-act="pair-share">Link teilen</button>':''}<button class="btn" data-act="pair-copy">Link kopieren</button></div></section>
  <section class="panel pair"><b>2. Diesen Code dort eingeben</b><div class="pair-pin" aria-label="Code ${P.pin.split('').join(' ')}">${P.pin.slice(0,3)} ${P.pin.slice(3)}</div>
   <span class="hint">Gilt 30 Minuten. Link und Code gehören zusammen – schick sie nie zusammen an andere.</span></section>
@@ -224,7 +224,15 @@ function vPairOut(){const P=view.P;let h=bar('backup','Neues Gerät verbinden')+
 let pairToken=null;
 function checkPairLink(){if(!STANDALONE||typeof location==='undefined')return;const m=/[#&]pair=([A-Za-z0-9_-]+)/.exec(location.hash||'');if(!m)return;pairToken=m[1];
  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}go('pairIn',{P:{pin:'',err:'',tries:0,busy:false}})}
-function vPairIn(){const P=view.P;app.innerHTML=`<div class="form pair-in"><div class="w-gull">${gullSVG('happy',96,'salute')}</div><h1>Gerät verbinden</h1>
+function pairUrl(){try{return location.origin+location.pathname+'#pair='+pairToken}catch(e){return ''}}
+function vPairIn(){const P=view.P;
+ if(inAppBrowser()&&!P.here&&pairToken){const url=pairUrl();app.innerHTML=`<div class="form pair-in"><div class="w-gull">${gullSVG('idle',96,'think')}</div><h1>Bitte im Browser öffnen</h1>
+  <p class="muted">Der Link ist im Browser einer anderen App aufgegangen (z. B. WhatsApp, Gmail oder Instagram). Von dort kann die Vokabelkoje nicht auf den Startbildschirm, und deine Schlüssel blieben nur in dieser App.</p>
+  ${isAndroid()?`<div class="stack"><a class="btn primary wide" href="${esc(intentLink(url,'com.android.chrome'))}">In Chrome öffnen</a><a class="btn wide" href="${esc(intentLink(url,'com.sec.android.app.sbrowser'))}">In Samsung Internet öffnen</a><a class="btn wide" href="${esc(intentLink(url,''))}">Anderen Browser wählen</a></div>`
+   :`<p class="note">Tippe oben oder unten auf ⋯ bzw. das Teilen-Symbol und wähle <b>„In Safari öffnen“</b>.</p>`}
+  <button class="btn wide" data-act="pair-copylink">Link kopieren</button><p class="hint">Klappt nichts davon: Link kopieren, Chrome oder Samsung Internet öffnen und den Link oben in die Adresszeile einfügen.</p>
+  <button class="linkbtn" data-act="pair-here">Trotzdem hier verbinden</button></div>`;return}
+ app.innerHTML=`<div class="form pair-in"><div class="w-gull">${gullSVG('happy',96,'salute')}</div><h1>Gerät verbinden</h1>
  <p class="muted">Gib den 6-stelligen Code ein, der auf deinem anderen Gerät steht.</p>
  <form id="pair-form" class="stack" autocomplete="off"><input id="pair-pin" class="big-input pair-pin-in" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="123 456" aria-label="Code" value="${esc(P.pin)}">
  <button class="btn primary wide" ${P.busy?'disabled':''}>${P.busy?'Verbinde …':'Verbinden'}</button></form>${errHtml(P.err)}
@@ -233,7 +241,7 @@ async function pairSubmit(){const P=view.P,inp=$('#pair-pin');const pin=(inp&&in
  P.busy=true;P.err='';render();
  try{const d=await readPair(pairToken,pin);if(!d||Date.now()-d.t>PAIR_TTL)throw new Error('alt');
   if(d.k)prefs.gemKey=d.k;if(d.g){prefs.ghToken=d.g;prefs.gistId=d.i||'';prefs.syncErr=''}
-  Object.entries(d.s||{}).forEach(([k,v])=>{if(v!=null&&v!=='')prefs[k]=v});savePrefs();applyTheme();pairToken=null;
+  Object.entries(d.s||{}).forEach(([k,v])=>{if(v!=null&&v!=='')prefs[k]=v});prefs.justPaired=now();prefs.installHide=0;savePrefs();applyTheme();pairToken=null;
   toast(d.g?'Verbunden! Dein Lernstand wird geholt …':'Verbunden! Der Gemini-Schlüssel ist eingetragen.');go('home');if(d.g&&canSync()){await sync();if(view.name==='home')render()}}
  catch(e){P.busy=false;P.tries++;if(e&&e.message==='alt'){P.err='Dieser Link ist abgelaufen. Erstell auf dem anderen Gerät einen neuen.';pairToken=null}
   else P.err=P.tries>=5?'Zu viele Versuche. Erstell auf dem anderen Gerät einen neuen Link.':'Der Code passt nicht. Schau nochmal genau hin.';if(P.tries>=5)pairToken=null;render()}}

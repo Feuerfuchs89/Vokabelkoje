@@ -5,6 +5,17 @@ const app=$('#app');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Math.random().toString(36).slice(2,10);
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+/* Lösungshilfe wie bei Babbel: 1. Tipp = Buchstabensalat (zählt noch), 2. Tipp = Lösung (zählt nicht als gewusst) */
+const helpTarget=a=>{const x=String(a||'').replace(/\([^)]*\)/g,' ').split(/\s*[\/;|]\s*/).map(s=>s.replace(/\s+/g,' ').trim()).filter(Boolean);return x[0]||String(a||'').trim()};
+function scrambleWord(w){const ch=[...w];if(ch.length<2)return w;if(new Set(ch.map(c=>c.toLowerCase())).size<2)return w;let s,n=0;do{s=shuffle([...ch]).join('')}while(s.toLowerCase()===w.toLowerCase()&&++n<12);return s}
+const scramble=a=>helpTarget(a).split(' ').map(scrambleWord).join(' ');
+const tiles=(s,cls='')=>`<div class="scr ${cls}">${String(s).split(' ').map(w=>`<span class="w">${[...w].map(c=>`<i>${esc(c)}</i>`).join('')}</span>`).join('')}</div>`;
+function helpHtml(H,act,lang){const lv=H.lv||0;let h='<div class="helpbox">';
+ if(lv===1)h+=`<div lang="${short(lang)}" aria-label="Buchstabensalat">${tiles(H.scr)}</div>`;
+ if(lv===2)h+=`<div lang="${short(lang)}" aria-label="Lösung">${tiles(H.sol,'sol')}</div><span class="helpnote">Tipp es ab – zählt diesmal nicht als gewusst.</span>`;
+ if(lv<2)h+=`<button type="button" class="linkbtn" data-act="${act}">${lv?'Lösung zeigen':'💡 Tipp'}</button>`;
+ return h+'</div>'}
+const helpStep=(H,answer)=>{H.lv=Math.min(2,(H.lv||0)+1);if(H.lv===1){H.scr=scramble(answer);if(H.scr===helpTarget(answer))H.lv=2}H.sol=helpTarget(answer);render();const i=document.querySelector('.write input:not([disabled])');if(i)i.focus()};
 const DAY=864e5, INT=[0,1,3,7,14,30,60,120];
 const KEY='vokabelkoje.v1', PKEY='vokabelkoje.prefs';
 const LANGS=[['de-DE','Deutsch'],['en-GB','Englisch'],['es-ES','Spanisch'],['fr-FR','Französisch'],['it-IT','Italienisch'],['nl-NL','Niederländisch'],['pt-PT','Portugiesisch'],['sv-SE','Schwedisch'],['da-DK','Dänisch'],['no-NO','Norwegisch'],['pl-PL','Polnisch'],['cs-CZ','Tschechisch'],['tr-TR','Türkisch'],['hr-HR','Kroatisch'],['hu-HU','Ungarisch'],['fi-FI','Finnisch'],['uk-UA','Ukrainisch'],['ko-KR','Koreanisch'],['ru-RU','Russisch'],['el-GR','Griechisch'],['ja-JP','Japanisch'],['zh-CN','Chinesisch'],['la','Latein']];
