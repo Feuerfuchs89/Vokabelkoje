@@ -6,7 +6,7 @@ function curCard(){if(view.name==='q'&&view.Q.cur)return card(getSet(view.Q.cur.
 function toggleStar(c){if(!c)return;c.star=!c.star;touch(c);save();render()}
 function expectedFor(target){if(target==='q-in'&&view.Q&&view.Q.cur){const s=getSet(view.Q.cur.sid);return dirOf(s,card(s,view.Q.cur.cid)).answer}
  if(/^tq\d+$/.test(target)&&view.T){const q=view.T.qs[+target.slice(2)];return q&&q.answer}
- if(target==='dr-in'&&view.D&&view.D.data){const t=view.D.data.tasks[view.D.i];return t&&t.sol&&t.sol[0]}return null}
+ if(target==='dr-in'&&view.D&&view.D.data){const t=view.D.data.tasks[view.D.i];if(!t)return null;const g=t.gaps?t.gaps[view.D.g||0]:t.sol;return g&&g.join(' / ')}return null}
 const acts={
  back:b=>{const to=b.dataset.to;
   if(to==='unit'){let ref=view.uref;if(!ref){const s=getSet(view.id);if(s&&s.course)ref={id:s.course,uid:s.unit}}
@@ -57,7 +57,7 @@ const acts={
  'ts-wrong':()=>{const T=view.T,s=getSet(view.id);startFlash(s,[...new Set(T.qs.filter((q,i)=>!T.ok[i]).map(q=>q.cid))])},
  tile:b=>tile(+b.dataset.i),
  mic:b=>{const inp=document.getElementById(b.dataset.target);if(!inp)return;const want=expectedFor(b.dataset.target);
-  listen(b.dataset.lang,{btn:b,onFinal:alts=>{const pick=(want&&alts.find(a=>check(a,want)>0))||alts[0];inp.value=pick;
+  listen(b.dataset.lang,{btn:b,onFinal:alts=>{let pick=alts[0];if(want){const J=speechJudge(alts,want);pick=J.exact?J.said:J.ok?J.form:alts[0]}inp.value=pick;
    if(/^(q|c|dr)-in$/.test(b.dataset.target)){const f=document.getElementById(b.dataset.target.replace('-in','-form'));if(f)f.requestSubmit()}},onInterim:t=>{inp.value=t}})},
  'hf-go':()=>{keepAwake();view.H.misses=0;hfAsk()},
  'hf-pause':()=>hfPause(),

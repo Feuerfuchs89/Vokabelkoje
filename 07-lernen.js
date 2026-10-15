@@ -195,9 +195,18 @@ function hfSet(){const H=view.H,st=$('#hf-status'),hd=$('#hf-heard');if(st)st.te
  const sec=document.querySelector('.hands');if(sec)sec.className='hands st-'+H.state}
 function hfAsk(){const H=view.H;if(!H||H.stopped)return;if(!H.items.length){releaseWake();return render()}
  const s=getSet(view.id),c=card(s,H.items[0]);if(!c){H.items.shift();return hfAsk()}
- H.state='speak';H.heard='';H.msg='';render();
- const{prompt,askLang}=dirOf(s,c);
- speak(prompt,askLang,()=>{if(H.stopped||H.state!=='speak')return;setTimeout(()=>{if(!H.stopped&&H.state==='speak')hfListen()},250)})}
+ H.state='speak';H.heard='';H.msg='';H.retried=false;render();
+ const{prompt,askLang}=dirOf(s,c);hfPrefetch();
+ speak(prompt,askLang,()=>{if(H.stopped||H.state!=='speak')return;setTimeout(()=>{if(!H.stopped&&H.state==='speak')hfListen()},250)},false,hfVoice())}
+// Freihändig: Gemini-Stimme, wenn eingerichtet (wie bei der Möwe). Die nächsten Karten werden vorab geholt, damit es ohne Pause weitergeht.
+const hfVoice=()=>({cloud:cloudOK()&&prefs.hfEngine!=='device'});
+const HF_PHRASES=['Richtig.','Leider nicht. Richtig ist','Die Antwort ist','Nicht ganz verstanden. Nochmal, bitte.'];
+let hfFetching=false;
+async function hfPrefetch(){const H=view.H;if(hfFetching||!H||!hfVoice().cloud||learnOffline())return;hfFetching=true;
+ try{const s=getSet(view.id),todo=[];H.items.slice(0,3).forEach(id=>{const c=card(s,id);if(!c)return;const d=dirOf(s,c);todo.push([d.prompt,d.askLang],[d.answer,d.ansLang])});
+  HF_PHRASES.forEach(t=>todo.push([t,'de-DE']));
+  for(const [t,l] of todo){if(view.H!==H||H.stopped)break;const tx=speechText(t,l);if(!tx)continue;try{await cloudAudio(tx,l)}catch(e){if(e&&/limit/i.test(e.message||''))break}}}
+ finally{hfFetching=false}}
 function hfListen(){const H=view.H,s=getSet(view.id),c=card(s,H.items[0]),{ansLang}=dirOf(s,c);
  H.state='listen';H.msg='';render();
  listen(ansLang,{quiet:true,
@@ -206,15 +215,17 @@ function hfListen(){const H=view.H,s=getSet(view.id),c=card(s,H.items[0]),{ansLa
   onNone:fatal=>{if(H.stopped||H.state!=='listen')return;
    if(fatal){H.state='paused';H.msg='Mikrofon nicht verfügbar. Prüfe die Browser-Erlaubnis.';render();return}
    H.misses++;if(H.misses>=2){H.misses=0;H.state='paused';H.msg='Nichts gehört. Pausiert.';render()}else hfAsk()}})}
-const IDK=/wei(ß|ss) (ich )?(es )?nicht|keine ahnung|überspring|i don'?t know|no s[eé]|je ne sais pas|non lo so|skip|pass/i;
 function hfJudge(alts){const H=view.H,s=getSet(view.id),c=card(s,H.items[0]),{answer,ansLang}=dirOf(s,c);
- H.misses=0;const idk=alts.some(a=>IDK.test(a));const hit=idk?null:alts.find(a=>check(a,answer)>0);const ok=!!hit;
- H.heard=hit||alts[0];H.state='feedback';H.lastOk=ok;logAnswer();
+ H.misses=0;const J=speechJudge(alts,answer),idk=!J.ok&&alts.some(isIdk),ok=J.ok;
+ // knapp daneben: vermutlich verhört – einmal nachfragen statt falsch werten
+ if(!ok&&!idk&&J.close&&!H.retried){H.retried=true;H.heard=J.said;H.state='speak';H.msg='Nicht ganz verstanden – nochmal, bitte.';render();
+  speak('Nicht ganz verstanden. Nochmal, bitte.','de-DE',()=>{if(H.stopped||H.state!=='speak')return;setTimeout(()=>{if(!H.stopped&&H.state==='speak')hfListen()},250)},false,hfVoice());return}
+ H.heard=ok?J.said:alts[0];H.state='feedback';H.lastOk=ok;logAnswer();
  let again;if(c.lv>=1){if(!ok)H.failed.add(c.id);again=gradeReview(c,ok,H.failed.has(c.id))}else again=gradeLearn(c,ok);
  H.items.shift();if(again)H.items.splice(Math.min(ok?3:2,H.items.length),0,c.id);
  ok?H.ok++:H.no++;db.fresh=false;save();
- H.msg=ok?'Richtig':`Richtig ist: ${answer}`;render();
+ H.msg=ok?(J.exact?'Richtig':`Richtig (verstanden: „${J.said}“)`):`Richtig ist: ${answer}`;render();
  const next=()=>{if(H.stopped||H.state!=='feedback')return;setTimeout(()=>{if(!H.stopped&&H.state==='feedback')hfAsk()},400)};
- if(ok)speak('Richtig.','de-DE',next);
- else speak(idk?'Die Antwort ist':'Leider nicht. Richtig ist','de-DE',()=>{if(H.stopped||H.state!=='feedback')return;speak(answer,ansLang,next)})}
+ if(ok)speak('Richtig.','de-DE',next,false,hfVoice());
+ else speak(idk?'Die Antwort ist':'Leider nicht. Richtig ist','de-DE',()=>{if(H.stopped||H.state!=='feedback')return;speak(answer,ansLang,next,false,hfVoice())},false,hfVoice())}
 function hfPause(){const H=view.H;H.state='paused';H.msg='';stopListen();stopSpeak();releaseWake();render()}

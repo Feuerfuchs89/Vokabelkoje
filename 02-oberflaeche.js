@@ -57,9 +57,20 @@ const wantCloud=lang=>cloudOK()&&(prefs.ttsEngine==='gemini'||noDeviceVoice(lang
 const audioCache=new Map();let player=null,audioUnlocked=false,speakGen=0;
 const SILENT_WAV='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
 function getPlayer(){if(!player){try{player=new Audio();player.preload='auto'}catch(e){player=null}}return player}
-function pcmToWav(b64,rate){const bin=atob(b64),n=bin.length,buf=new ArrayBuffer(44+n),d=new DataView(buf);const w=(o,s)=>{for(let i=0;i<s.length;i++)d.setUint8(o+i,s.charCodeAt(i))};
+// Gemini liefert rohes PCM (16 Bit, mono). Am Ende hängt manchmal Rauschen/Knistern: Stille und kurze Störgeräusche hinten abschneiden, sanft ausblenden
+function cleanPCM(s,rate){const W=Math.max(1,Math.round(rate/100)),nw=Math.floor(s.length/W);if(nw<5)return s;
+ const rms=new Float32Array(nw);let peak=0;for(let w=0;w<nw;w++){let a=0;for(let i=w*W;i<(w+1)*W;i++)a+=s[i]*s[i];rms[w]=Math.sqrt(a/W);if(rms[w]>peak)peak=rms[w]}
+ if(peak<200)return s;const loud=w=>rms[w]>=peak*.06,quiet=w=>rms[w]<peak*.03;
+ let end=nw-1;while(end>0&&!loud(end))end--;
+ // kurzer Knister-Burst nach langer Pause (≥ 0,6 s Ruhe, Burst < 0,3 s) = Störgeräusch, kein Wort
+ let s0=end;while(s0>0&&loud(s0-1))s0--;let g=s0-1,gap=0;while(g>0&&quiet(g)){gap++;g--}
+ if(end-s0<30&&gap>=60&&g>0&&loud(g))end=g;
+ const cut=Math.min(s.length,(end+1)*W+Math.round(rate*.08)),out=s.slice(0,cut),fo=Math.min(cut,Math.round(rate*.06)),fi=Math.min(cut,Math.round(rate*.005));
+ for(let i=0;i<fo;i++)out[cut-1-i]=Math.round(out[cut-1-i]*(i/fo));for(let i=0;i<fi;i++)out[i]=Math.round(out[i]*(i/fi));return out}
+function pcmToWav(b64,rate){const bin=atob(b64),len=bin.length>>1,raw=new Int16Array(len);for(let i=0;i<len;i++){const v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8);raw[i]=v>32767?v-65536:v}
+ const pcm=cleanPCM(raw,rate),n=pcm.length*2,buf=new ArrayBuffer(44+n),d=new DataView(buf);const w=(o,s)=>{for(let i=0;i<s.length;i++)d.setUint8(o+i,s.charCodeAt(i))};
  w(0,'RIFF');d.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,rate,true);d.setUint32(28,rate*2,true);d.setUint16(32,2,true);d.setUint16(34,16,true);w(36,'data');d.setUint32(40,n,true);
- const u8=new Uint8Array(buf,44);for(let i=0;i<n;i++)u8[i]=bin.charCodeAt(i);return new Blob([buf],{type:'audio/wav'})}
+ for(let i=0;i<pcm.length;i++)d.setInt16(44+2*i,pcm[i],true);return new Blob([buf],{type:'audio/wav'})}
 const enLang=l=>{try{return new Intl.DisplayNames(['en'],{type:'language'}).of(short(l))}catch(e){return short(l)}};
 // Gemini-Audio bleibt im Browser gespeichert: spart Tageslimit und klappt danach auch offline
 const AUDIO_STORE='vokabelkoje-audio',audioReq=key=>'https://vokabelkoje.audio/'+encodeURIComponent(key);
@@ -70,14 +81,17 @@ async function audioToStore(key,blob){if(!hasStore())return;try{const c=await ca
 async function audioStoreCount(){if(!hasStore())return 0;try{return (await (await caches.open(AUDIO_STORE)).keys()).length}catch(e){return 0}}
 async function audioStoreClear(){audioCache.clear();if(hasStore())try{await caches.delete(AUDIO_STORE)}catch(e){}}
 class OfflineMiss extends Error{}
-const audioKey=(text,lang,voice)=>lang+'|'+(voice||prefs.ttsVoice||'Kore')+'|'+text;
-async function cloudAudio(text,lang,opt={}){const voice=opt.voice||prefs.ttsVoice||'Kore',key=audioKey(text,lang,voice);if(audioCache.has(key))return audioCache.get(key);
+const audioKey=(text,lang,voice)=>'v2|'+lang+'|'+(voice||prefs.ttsVoice||'Kore')+'|'+text;
+const audioPending=new Map();
+function cloudAudio(text,lang,opt={}){const k=audioKey(text,lang,opt.voice||prefs.ttsVoice||'Kore');if(audioPending.has(k))return audioPending.get(k);
+ const pr=cloudAudio0(text,lang,opt).finally(()=>audioPending.delete(k));audioPending.set(k,pr);return pr}
+async function cloudAudio0(text,lang,opt={}){const voice=opt.voice||prefs.ttsVoice||'Kore',key=audioKey(text,lang,voice);if(audioCache.has(key))return audioCache.get(key);
  const stored=await audioFromStore(key);if(stored){audioCache.set(key,stored);return stored}
  if(learnOffline())throw new OfflineMiss('Offline: Dieses Wort ist noch nicht gespeichert');
  let last='';const tm=[...new Set([...(prefs.ttsModel?[prefs.ttsModel]:[]),...TTS_MODELS,...(await ttsModels())])];
  for(const m of tm){let r;
   try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':prefs.gemKey.trim()},
-   body:JSON.stringify({contents:[{parts:[{text:`Read aloud clearly in ${enLang(lang)}, nothing else: ${text}`}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}}})})}
+   body:JSON.stringify({contents:[{parts:[{text:speechText(text,lang)||text}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:voice}}}}})})}
   catch(e){throw new Error('Keine Verbindung zu Gemini')}
   if(r.ok){const j=await r.json();const part=(((j.candidates||[])[0]||{}).content||{}).parts||[];const inl=(part.find(p=>p.inlineData)||{}).inlineData;
    if(inl&&inl.data){const rate=+((/rate=(\d+)/.exec(inl.mimeType||'')||[])[1])||24000;const blob=pcmToWav(inl.data,rate),url=URL.createObjectURL(blob);audioToStore(key,blob);

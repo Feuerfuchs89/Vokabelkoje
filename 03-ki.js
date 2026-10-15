@@ -135,6 +135,20 @@ function check(input,answer){const a=norm(input);if(!a)return 0;
  if(alts.map(plain).includes(plain(a)))return 1;
  if(alts.map(x=>plain(x.replace(ART,''))).includes(plain(a.replace(ART,''))))return 1;
  return 0}
+// Spracheingabe: Die Erkennung verhört sich gern ein bisschen (Endungen, Artikel, ähnlich klingende Wörter).
+// Daher alle Alternativen prüfen und kleine Abweichungen verzeihen. Geschrieben wird weiter streng geprüft.
+function lev(a,b){if(a===b)return 0;const m=a.length,n=b.length;if(!m||!n)return m||n;let p=Array.from({length:n+1},(_,j)=>j);
+ for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+const spk=s=>plain(norm(s).replace(ART,'')).replace(/[-'’]/g,' ').replace(/\s+/g,' ').trim();
+const simil=(a,b)=>{a=spk(a);b=spk(b);if(!a||!b)return 0;return 1-lev(a,b)/Math.max(a.length,b.length)};
+function speechJudge(alts,answer){const forms=[answer,...String(answer).split(/\s*[\/;]\s*|,\s+/)].map(x=>String(x).trim()).filter(Boolean);
+ let best={ok:false,close:false,score:0,said:alts[0]||'',form:forms[forms.length>1?1:0]||answer};
+ for(const a of alts){if(check(a,answer)>0)return {ok:true,close:true,score:1,said:a,form:a,exact:true};
+  for(const f of forms){const sc=simil(a,f);if(sc>best.score)best={ok:false,close:false,score:sc,said:a,form:f}}}
+ const len=spk(best.form).length;best.ok=best.score>=(len>=8?.8:len>=4?.85:1);best.close=!best.ok&&best.score>=.6;return best}
+// „Weiß ich nicht“ nur, wenn das wirklich alles ist, was gesagt wurde (nicht bei „Kompass“ oder „Skipper“)
+const IDK_RE=/^(ich )?wei(ß|ss) (ich |es )*nicht$|^keine ahnung$|^(überspringen|weiter|nächste)$|^i (don'?t|do not) know$|^(skip|pass|next)$|^no (lo )?s[eé]$|^je ne sais pas$|^non lo so$/i;
+const isIdk=a=>IDK_RE.test(norm(a));
 function options(s,c,dir){const k=dir==='t'?'t':'d';const others=shuffle([...new Set(s.cards.filter(x=>x.id!==c.id&&x[k]!==c[k]).map(x=>x[k]))]).slice(0,3);return shuffle([c[k],...others])}
 function dirOf(s,c,dir=prefs.dir){return dir==='t'?{prompt:c.d,answer:c.t,askLang:s.l2,ansLang:s.l1}:{prompt:c.t,answer:c.d,askLang:s.l1,ansLang:s.l2}}
 
