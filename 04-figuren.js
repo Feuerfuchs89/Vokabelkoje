@@ -1,10 +1,15 @@
 // Vokabelkoje – figuren
 /* ---------- Motivation: Möwe, Wache, Serie ---------- */
 /* ---------- Möwe (flächiger Maskottchen-Stil, mit Aktionen) ---------- */
+let gullN=0;
+// Flügel: eine Form, die schwarze Spitze ist dieselbe Form, nur auf das äußere Ende zugeschnitten – so folgt sie immer der Flügelrichtung
+const GULL_WING='M0 0 C-9 4 -12 18 -9 31 C-8 37 -5 43 -1 47 C3 41 5.5 30 5.5 18 C5.5 9 4 3 0 0Z';
+function gullWing(tx,ty,rot,sc,cid){return `<g transform="translate(${tx} ${ty}) rotate(${rot}) scale(${sc})"><path d="${GULL_WING}" fill="#b4c3ce"/>
+ <path d="M-3.5 7 C-6.5 15 -6.5 23 -4.5 30 M1 9 C0.2 17 0 25 -1 32" stroke="#97a9b6" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+ <path d="${GULL_WING}" fill="#2c3943" clip-path="url(#${cid})"/><path d="M-4 38 l1.6 5 M0.6 37.5 l.2 6" stroke="#fff" stroke-width="1.1" stroke-linecap="round" opacity=".6"/></g>`}
 function gullSVG(mood,size,act){size=size||88;act=act||'';const up=mood==='happy'||mood==='cheer';const closed=mood==='happy'||act==='sleep'||act==='fish';
- const wingUp=`<path d="M24 56 C14 54 6 46 3 34 C12 34 22 40 27 48Z" fill="#a9bac6"/><path d="M3 34 C4 40 7 44 11 46 C11 41 8 36 3 34Z" fill="#34434e"/><circle cx="6.5" cy="38.5" r="1.3" fill="#fff"/>`;
- const wingDown=`<path d="M26 38 C14 44 11 62 15 78 C22 80 28 74 30 64Z" fill="#a9bac6"/><path d="M15 78 C17 86 24 86 28 80 C24 80 19 79 15 78Z" fill="#34434e"/><circle cx="20" cy="81" r="1.3" fill="#fff"/>`;
- const wingSalute=`<path d="M26 54 C18 46 18 30 26 22 C30 28 31 40 30 50Z" fill="#a9bac6"/><path d="M26 22 C23 25 22 29 23 32 C26 30 27 26 26 22Z" fill="#34434e"/>`;
+ const id='gw'+(++gullN),cid=id+'c';
+ const wingUp=gullWing(25,52,118,.64,cid),wingDown=gullWing(25,41,13,1,cid),wingSalute=gullWing(26,55,172,.72,cid);
  const leftUp=up||act==='knot',rightUp=up||['spy','whistle','sword','anchor','knot'].includes(act);
  const rightWing=act==='salute'?wingSalute:rightUp?wingUp:wingDown;
  const look=act==='think'?-3.5:act==='sword'?2.5:0,lookX=act==='sword'?2:0;
@@ -25,16 +30,20 @@ function gullSVG(mood,size,act){size=size||88;act=act||'';const up=mood==='happy
   sleep:`<path d="M30 26 C32 12 56 6 68 16 C74 10 82 9 88 13 C82 15 77 20 72 27 Z" fill="#c8372d"/><path d="M30 26 C44 20 58 20 72 27" fill="none" stroke="#fff" stroke-width="4"/><circle cx="89" cy="13" r="4.5" fill="#fff"/><g class="notes"><text x="74" y="44" font-size="10" fill="#1f63a8" font-weight="800">z</text><text x="82" y="36" font-size="13" fill="#1f63a8" font-weight="800">Z</text></g>`,
   salute:''}[act]||'';
  return `<svg class="gull ${mood||'idle'}${act?' act-'+act:''}" viewBox="0 0 100 100" width="${size}" height="${size}" aria-hidden="true" overflow="visible">
+ <defs><clipPath id="${cid}"><path d="M-20 34 L-7 36.5 L-4 33.5 L-1 36.5 L2 33.5 L20 35 V70 H-20Z"/></clipPath>
+ <radialGradient id="${id}b" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#f3f6f8"/><stop offset="1" stop-color="#dde5ea"/></radialGradient></defs>
  <circle cx="50" cy="52" r="48" fill="var(--sea)"/>
  <ellipse cx="50" cy="95" rx="22" ry="3.5" fill="#1d2a33" opacity=".12"/>
  <path d="M34 86 l6 -4 l6 4 q-6 4 -12 0Z M54 86 l6 -4 l6 4 q-6 4 -12 0Z" fill="#ff8a2a"/>
  <rect x="38" y="78" width="4.5" height="8" rx="2" fill="#ff8a2a"/><rect x="57.5" y="78" width="4.5" height="8" rx="2" fill="#ff8a2a"/>
  <g class="body">
- <path d="M50 16 C71 16 82 33 82 54 C82 74 69 86 50 86 C31 86 18 74 18 54 C18 33 29 16 50 16Z" fill="#f8fafb"/>
+ <path d="M47 18 C44 10 48 6 52 8 C50 10 50.5 13 52.5 17 C54 12 57 11 59 12 C56 14 55 16 55 19Z" fill="#eef2f5" stroke="#d3dce2" stroke-width="1"/>
+ <path d="M50 16 C71 16 82 33 82 54 C82 74 69 86 50 86 C31 86 18 74 18 54 C18 33 29 16 50 16Z" fill="url(#${id}b)"/>
  <ellipse cx="50" cy="70" rx="22" ry="13" fill="#edf2f5"/>
  <g class="wl">${leftUp?wingUp:wingDown}</g><g class="wr"><g transform="matrix(-1 0 0 1 100 0)">${rightWing}</g></g>
  ${eyes}${brows}
  <path d="M38 55 Q50 50 62 55 Q60 61 54 64 L50 72 L46 64 Q40 61 38 55Z" fill="#ffc21f"/><path d="M42 61 Q50 64 58 61 Q56 65 53 66 L50 72 L47 66 Q44 65 42 61Z" fill="#f2a10f"/><circle cx="52.6" cy="66" r="2" fill="#e04848"/>
+ ${act==='sleep'?'':`<path d="M33 73 Q50 81 67 73 L63 79 Q50 86 37 79Z" fill="#1f63a8"/><path d="M35.5 75.5 Q50 82.5 64.5 75.5" fill="none" stroke="#fff" stroke-width="1.3" opacity=".85"/><path d="M47 79 L44 88 L50 85 L56 88 L53 79Z" fill="#1a5590"/><circle cx="50" cy="80" r="3.2" fill="#2a74b8"/>`}
  ${up?'<ellipse cx="28" cy="57" rx="4.5" ry="2.8" fill="#ffb7a8" opacity=".75"/><ellipse cx="72" cy="57" rx="4.5" ry="2.8" fill="#ffb7a8" opacity=".75"/>':''}
  ${extra}
  </g></svg>`}
