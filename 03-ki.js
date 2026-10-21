@@ -41,19 +41,22 @@ function aicSet(k,v){try{const c=aicAll();c[k]={v,t:Date.now()};const ks=Object.
 function fromCache(k,why){const v=k&&aicGet(k);if(v==null)return null;aiFromCache=true;toast(why==='offline'?'Offline: gespeicherte Fassung von früher geladen':'KI gerade nicht erreichbar: gespeicherte Fassung geladen');return v}
 const blobToB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(b)});
 async function shrink(file){try{const bmp=await createImageBitmap(file);const k=Math.min(1,1600/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(b=>r(b||file),'image/jpeg',.85))}catch(e){return file}}
-async function gemini(turns,{json,image,fresh}){
+async function gemini(turns,{json,image,fresh,timeout}){
  if(!prefs.gemKey)throw new AIError('NOKEY');
  const contents=[];turns.forEach(t=>{const role=t.role==='assistant'?'model':'user';const last=contents[contents.length-1];if(last&&last.role===role)last.parts[0].text+='\n\n'+t.content;else contents.push({role,parts:[{text:t.content}]})});
  if(image)contents[contents.length-1].parts.push({inline_data:{mime_type:image.type||'image/jpeg',data:await blobToB64(image)}});
- let models=[...new Set([prefs.gemModel.trim(),...GEM_MODELS].filter(Boolean))];let last='Gemini ist gerade nicht erreichbar. Versuch es gleich nochmal.',found=false;
+ let models=[...new Set([prefs.gemModel.trim(),prefs.gemOk||'',...GEM_MODELS].filter(Boolean))];let last='Gemini ist gerade nicht erreichbar. Versuch es gleich nochmal.',found=false;
  for(let mi=0;mi<models.length;mi++){const m=models[mi];let r,data={};
   if(mi===models.length-1&&!found){found=true;const more=(await textModels()).filter(x=>!models.includes(x)).slice(0,4);models.push(...more)}
-  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':prefs.gemKey},
+  // Hängt ein Modell (überlastet), nach einer Weile das nächste probieren
+  const ac=typeof AbortController!=='undefined'?new AbortController():null,tm=ac?setTimeout(()=>ac.abort(),timeout||70000):null;
+  try{r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':prefs.gemKey},signal:ac?ac.signal:undefined,
    body:JSON.stringify({contents,generationConfig:json?{responseMimeType:'application/json',temperature:fresh?.8:.4}:{temperature:.8}})})}
-  catch(e){throw new AIError('Keine Verbindung zu Gemini. Bist du online?')}
+  catch(e){clearTimeout(tm);if(e&&e.name==='AbortError'){last='Gemini antwortet gerade sehr langsam. Versuch es gleich nochmal.';continue}throw new AIError('Keine Verbindung zu Gemini. Bist du online?')}
+  clearTimeout(tm);
   try{data=await r.json()}catch(e){}
   if(r.ok){const c=data.candidates&&data.candidates[0];const txt=c&&c.content&&c.content.parts?c.content.parts.map(p=>p.text||'').join(''):'';
-   if(txt.trim())return txt;
+   if(txt.trim()){if(prefs.gemOk!==m){prefs.gemOk=m;savePrefs()}return txt}
    if((data.promptFeedback&&data.promptFeedback.blockReason)||(c&&c.finishReason==='SAFETY'))throw new AIError('Gemini hat die Anfrage abgelehnt. Formulier sie etwas anders.');
    last='Gemini hat nichts geantwortet. Versuch es nochmal.';continue}
   const msg=(data.error&&data.error.message)||'';
@@ -64,7 +67,12 @@ async function gemini(turns,{json,image,fresh}){
   throw new AIError('Gemini meldet einen Fehler: '+(msg||r.status))}
  throw new AIError(last)}
 const CLAUDE_ERR={not_granted:'Du hast der App die KI-Nutzung nicht erlaubt.',sampling_disabled:'Claude ist für dieses Konto nicht verfügbar.',rate_limited:'Gerade zu viele Anfragen. Versuch es gleich nochmal.',refused:'Die KI hat die Anfrage abgelehnt. Formulier sie etwas anders.',image_rejected:'Das Bild konnte nicht gelesen werden. Nimm ein anderes.',images_unavailable:'Fotos gehen in dieser Ansicht nicht.',invalid_json:'Die KI-Antwort war unvollständig. Versuch es nochmal.',session_expired:'Bitte melde dich neu bei Claude an.',empty_completion:'Die KI hat nichts geantwortet. Versuch es nochmal.'};
-async function ai(turns,o={}){aiFromCache=false;
+let aiBusy=0;
+async function ai(turns,o={}){aiBusy++;try{return await ai0(turns,o)}finally{aiBusy--}}
+// Für den Vorrat im Hintergrund: keine Meldungen, kein Rückgriff auf alte Fassungen
+async function aiQuiet(turns,o={}){if(!aiOK()||learnOffline())throw new AIError('offline');if(typeof turns==='string')turns=[{role:'user',content:turns}];
+ const v=await aiCall(turns,o);if(o.cacheKey&&v!=null)aicSet(o.cacheKey,v);return v}
+async function ai0(turns,o={}){aiFromCache=false;
  if(!aiOK())throw new AIError('Für dieses Profil sind die KI-Funktionen ausgeschaltet. Das lässt sich unter Profile ändern.');
  if(learnOffline()){const c=fromCache(o.cacheKey,'offline');if(c!=null)return c;throw new AIError(offlineMsg())}
  if(typeof turns==='string')turns=[{role:'user',content:turns}];

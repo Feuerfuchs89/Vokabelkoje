@@ -133,6 +133,7 @@ const acts={
   setTimeout(()=>{if(view.K!==K)return;K.fb=null;K.i++;if(K.i>=K.qs.length)checkFinish();render();window.scrollTo(0,0)},j===K.qs[K.i].a?450:1100)},
  drill:b=>startDrill(b.dataset.l,b.dataset.k),
  'dr-reload':()=>drillLoad(),
+ 'dr-old':()=>drillOld(),
  'dr-start':()=>{view.D.stage='task';view.D.i=0;view.D.ok=0;view.D.res=null;view.D.g=0;view.D.gres=[];render()},
  'dr-opt':b=>{const D=view.D,t=D.data.tasks[D.i],j=+b.dataset.j;drillAnswer({ok:j===t.a,pick:j})},
  'dr-next':()=>drillNext(),

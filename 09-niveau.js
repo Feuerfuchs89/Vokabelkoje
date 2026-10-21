@@ -110,25 +110,58 @@ function vCheck(){const K=view.K,lang=view.lang,TL=langName(lang),U=view.uref,UU
 /* ---------- Gezieltes Training ---------- */
 function startDrill(lang,k){if(!prof(lang).weak[k])return toast('Dieses Thema gibt es nicht mehr');go('drill',{lang,D:{k,stage:'load',data:null,i:0,res:null,ok:0,err:''}});drillLoad()}
 function startDrillTopic(lang,topic,uref){go('drill',{lang,uref,D:{k:null,topic,stage:'load',data:null,i:0,res:null,ok:0,err:''}});drillLoad()}
-async function drillLoad(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''},TL=langName(lang),voc=w.cat==='v';D.stage='load';D.err='';render();
- adoptLevel(lang);
- try{const r=await ai(`Erstelle eine kurze Übungseinheit für einen deutschsprachigen Lerner (Niveau ${prefs.level}) in ${TL} zum Thema „${w.topic}“.${w.desc?` Beobachtetes Problem: ${w.desc}`:''}${w.ex?` Richtiges Beispiel: ${w.ex}`:''}
+function drillPrompt(lang,w){const TL=langName(lang),voc=w.cat==='v';return `Erstelle eine kurze Übungseinheit für einen deutschsprachigen Lerner (Niveau ${prefs.level}) in ${TL} zum Thema „${w.topic}“.${w.desc?` Beobachtetes Problem: ${w.desc}`:''}${w.ex?` Richtiges Beispiel: ${w.ex}`:''}
 Antworte nur mit JSON:
 {"regel":"Erklärung der Regel auf Deutsch, höchstens 4 kurze Sätze","beispiele":["2 bis 3 Beispielsätze auf ${TL}"],"aufgaben":[…]}
 Genau 8 Aufgaben, gemischt aus zwei Typen und von leicht nach schwer:
 {"typ":"mc","frage":"Satz auf ${TL} mit ___","opts":["…","…","…","…"],"a":Index der richtigen Antwort,"erkl":"kurze Erklärung auf Deutsch"}
 {"typ":"luecke","frage":"Satz auf ${TL} mit einer oder mehreren Lücken ___","hinweis":"${voc?'deutsche Bedeutung des gesuchten Wortes, bei mehreren Lücken in derselben Reihenfolge':'Grundform in Klammern, die der Lerner verändern muss, oder deutscher Hinweis, bei mehreren Lücken in derselben Reihenfolge'}","loesungen":[["alle richtigen Formen für Lücke 1"],["alle richtigen Formen für Lücke 2, nur falls es sie gibt"]],"erkl":"kurze Erklärung auf Deutsch"}
 „loesungen“ enthält für jede Lücke ___ genau eine Liste, in der Reihenfolge der Lücken im Satz.
-Wichtig für Lückenaufgaben: Die Lösung darf NIE wörtlich im Satz oder im Hinweis stehen. Wenn die Lösung genau das Wort in Klammern wäre (z. B. „(believe)“ → „believe“), ist die Aufgabe wertlos – dann ändere sie so, dass eine echte Umformung nötig ist (Zeitform, Person, Steigerung, Wortart …) oder gib stattdessen die deutsche Bedeutung als Hinweis. Schreibe nie „Setze … in der Grundform ein“. ${voc?`Das Thema ist Wortschatz: Gefragt ist das passende Wort auf ${TL}, der Hinweis ist seine deutsche Bedeutung, z. B. „(glauben)“.`:'Das Thema ist Grammatik: Die Lücken prüfen genau diese Regel.'}`,{json:true,fresh:true,cacheKey:`drill2|${lang}|${wkey(w.topic||'')}|${prefs.level}`});
-  const tasks=(Array.isArray(r&&r.aufgaben)?r.aufgaben:[]).map(t=>{if(!t||!t.frage)return null;
+Wichtig für Lückenaufgaben: Die Lösung darf NIE wörtlich im Satz oder im Hinweis stehen. Wenn die Lösung genau das Wort in Klammern wäre (z. B. „(believe)“ → „believe“), ist die Aufgabe wertlos – dann ändere sie so, dass eine echte Umformung nötig ist (Zeitform, Person, Steigerung, Wortart …) oder gib stattdessen die deutsche Bedeutung als Hinweis. Schreibe nie „Setze … in der Grundform ein“. ${voc?`Das Thema ist Wortschatz: Gefragt ist das passende Wort auf ${TL}, der Hinweis ist seine deutsche Bedeutung, z. B. „(glauben)“.`:'Das Thema ist Grammatik: Die Lücken prüfen genau diese Regel.'}`}
+function drillParse(r){const tasks=(Array.isArray(r&&r.aufgaben)?r.aufgaben:[]).map(t=>{if(!t||!t.frage)return null;
    if(t.typ==='mc'&&Array.isArray(t.opts)&&+t.a>=0&&+t.a<t.opts.length){const right=String(t.opts[+t.a]);const opts=shuffle([...new Set(t.opts.map(String))]);return {typ:'mc',frage:String(t.frage),opts,a:opts.indexOf(right),erkl:String(t.erkl||'')}}
    const gaps=gapSolutions(String(t.frage),t.loesungen!=null?t.loesungen:(t.loesung||t.antwort));if(!gaps)return null;
    if(trivialGaps(String(t.frage),String(t.hinweis||''),gaps))return null;
    return {typ:'luecke',frage:String(t.frage),hinweis:String(t.hinweis||''),gaps,sol:gaps[0],erkl:String(t.erkl||'')}}).filter(Boolean);
   if(tasks.length<3)throw new AIError('Die Übung konnte nicht erstellt werden. Versuch es nochmal.');
-  D.data={regel:String(r.regel||''),beispiele:(Array.isArray(r.beispiele)?r.beispiele:[]).map(String),tasks};D.stage='rule';D.i=0;D.ok=0;D.res=null}
- catch(e){D.err=e.message}
- if(view.D===D)render()}
+ return {regel:String(r.regel||''),beispiele:(Array.isArray(r.beispiele)?r.beispiele:[]).map(String),tasks}}
+async function drillGen(lang,w,quiet){const r=await (quiet?aiQuiet:ai)(drillPrompt(lang,w),{json:true,fresh:true,cacheKey:drillCacheKey(lang,w.topic)});return drillParse(r)}
+async function drillLoad(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''};D.stage='load';D.err='';D.slow=false;render();
+ adoptLevel(lang);const key=drillKey(lang,w.topic);let data=stockTake(key);
+ if(!data){const t=setTimeout(()=>{if(view.D===D&&D.stage==='load'&&!D.err){D.slow=true;render()}},8000);
+  try{data=await drillGen(lang,w)}catch(e){if(D.stage==='load')D.err=e.message}clearTimeout(t)}
+ if(data&&D.stage==='load'){D.data=data;D.stage='rule';D.i=0;D.ok=0;D.res=null}else if(data)stockPut(key,data); // schon mit älterer Übung gestartet: neue kommt in den Vorrat
+ if(view.D===D)render();
+ drillPrefetch(lang,w)}
+// Gemini braucht lange: auf Wunsch die zuletzt erzeugte Übung zum Thema nehmen
+function drillOld(){const D=view.D,lang=view.lang;if(!D||D.stage!=='load')return;const w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''};
+ try{const v=aicGet(drillCacheKey(lang,w.topic));if(!v)return toast('Keine ältere Übung gespeichert');D.data=drillParse(v);D.stage='rule';D.i=0;D.ok=0;D.res=null;D.err='';render()}catch(e){toast('Die ältere Übung ist nicht mehr lesbar')}}
+/* ---------- Vorrat: KI-Inhalte im Hintergrund vorbereiten ---------- */
+// Pro Thema liegen bis zu 2 fertige Übungen bereit (14 Tage haltbar). Wird eine genommen, holt die App leise Nachschub.
+const STOCK_KEY='vokabelkoje.vorrat',STOCK_MAX=2,STOCK_TTL=14*DAY;
+function stockAll(){try{return JSON.parse(localStorage.getItem(STOCK_KEY)||'{}')||{}}catch(e){return {}}}
+function stockSave(s){try{const ks=Object.keys(s);if(ks.length>40)ks.sort((a,b)=>(s[a].t||0)-(s[b].t||0)).slice(0,ks.length-40).forEach(k=>delete s[k]);localStorage.setItem(STOCK_KEY,JSON.stringify(s))}catch(e){}}
+const stockLive=e=>((e&&e.items)||[]).filter(x=>x&&now()-x.t<STOCK_TTL);
+const stockN=k=>stockLive(stockAll()[k]).length;
+function stockTake(k){const s=stockAll(),items=stockLive(s[k]);const it=items.shift();if(items.length)s[k]={items,t:now()};else delete s[k];stockSave(s);return it?it.v:null}
+function stockPut(k,v){if(v==null)return;const s=stockAll(),items=stockLive(s[k]);if(items.length>=STOCK_MAX)return;items.push({v,t:now()});s[k]={items,t:now()};stockSave(s)}
+const stockQ=[],stockFails={};let stockRun=false;
+function stockFill(k,gen,want=1){if(!aiOK()||learnOffline()||(STANDALONE&&!prefs.gemKey)||stockN(k)>=want||stockQ.some(q=>q.k===k)||(stockFails[k]||0)>=2)return;stockQ.push({k,gen,want});stockNext()}
+async function stockNext(){if(stockRun||!stockQ.length)return;stockRun=true;
+ await new Promise(r=>setTimeout(r,2500));
+ for(let i=0;aiBusy>0&&i<120;i++)await new Promise(r=>setTimeout(r,1500)); // Vordergrund hat Vorrang
+ const q=stockQ.shift();
+ if(q&&stockN(q.k)<q.want&&!learnOffline())try{stockPut(q.k,await q.gen())}catch(e){stockFails[q.k]=(stockFails[q.k]||0)+1}
+ stockRun=false;stockNext()}
+const profKey=()=>((curProf&&curProf())||{}).id||'';
+const drillKey=(lang,topic)=>`drill|${profKey()}|${lang}|${wkey(topic||'')}|${prefs.level}`;
+const drillCacheKey=(lang,topic)=>`drill2|${lang}|${wkey(topic||'')}|${prefs.level}`;
+function drillPrefetch(lang,w){if(!lang||!w||!w.topic)return;adoptLevel(lang);stockFill(drillKey(lang,w.topic),()=>drillGen(lang,w,true))}
+// Startseite: Übung zum heutigen Schwerpunkt und nächste Etappe schon mal vorbereiten
+let homePre=0;
+function homePrefetch(){if(now()-homePre<10*60*1000)return;homePre=now();const L=activeLang();if(!L||L==='de-DE'||!aiOK())return;
+ try{const f=dailyFocus(L);if(f&&f.k){const w=prof(L).weak[f.k];if(w)drillPrefetch(L,w)}}catch(e){}
+ try{(db.courses||[]).filter(c=>c.lang===L).forEach(c=>{const u=c.units.find(x=>x.status==='open'&&x.kind!=='exam');if(u)unitPrefetch(c,u)})}catch(e){}}
 const fillGap=(f,a)=>/_{2,}/.test(f)?f.replace(/_{2,}/,a):f;
 // Eine Lücke ist wertlos, wenn ihre Lösung schon wörtlich als Hinweis dasteht – z. B. „___ (believe)“ → „believe“
 const gapNorm=s=>String(s).toLowerCase().replace(/[’']/g,"'").replace(/[^\p{L}\p{N}' ]+/gu,' ').replace(/\s+/g,' ').trim();
@@ -155,7 +188,7 @@ function gapSentence(t,D){const parts=String(t.frage).split(/_{2,}/),r=D.res;let
  return h}
 function vDrill(){const D=view.D,lang=view.lang,w=(D.k&&prof(lang).weak[D.k])||{topic:D.topic||''},TL=lang;let h=bar(view.uref?'unit':'home','Training');
  h+=`<h1>${esc(w.topic)}</h1>`;
- if(D.stage==='load'){h+=D.err?errHtml(D.err)+'<button class="btn" data-act="dr-reload">Nochmal versuchen</button>':`<p class="thinking">${aiName()} stellt deine Übung zusammen …</p>`}
+ if(D.stage==='load'){h+=D.err?errHtml(D.err)+'<button class="btn" data-act="dr-reload">Nochmal versuchen</button>':`<p class="thinking">${aiName()} stellt deine Übung zusammen …</p>${D.slow?`<p class="hint">${aiName()} braucht heute länger als sonst.${aicGet(drillCacheKey(view.lang,w.topic))?' Du kannst so lange eine ältere Übung zum Thema machen – die neue landet dann im Vorrat für nächstes Mal.':''}</p>${aicGet(drillCacheKey(view.lang,w.topic))?'<button class="btn" data-act="dr-old">Ältere Übung nehmen</button>':''}`:''}`}
  else if(D.stage==='rule'){const d=D.data;h+=`<section class="rule"><span class="label">So geht's</span><p>${esc(d.regel)}</p>${d.beispiele.length?`<ul lang="${short(TL)}">${d.beispiele.map(b=>`<li>${tapText(b,TL)} ${sayBtn(b,TL)}</li>`).join('')}</ul>`:''}</section>
   <button class="btn primary wide" data-act="dr-start">${d.tasks.length} Aufgaben starten</button>`}
  else if(D.stage==='task'){const t=D.data.tasks[D.i],r=D.res;const answer=t.typ==='mc'?t.opts[t.a]:t.sol[0];const fullSent=t.typ==='luecke'?fillAll(t.frage,t.gaps.map(g=>g[0])):fillGap(t.frage,answer);

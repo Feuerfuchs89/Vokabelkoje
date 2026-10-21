@@ -83,24 +83,32 @@ function vCourse(){const c=getCourse(view.id);if(!c)return go('home');maybeExten
  app.innerHTML=h}
 function startUnit(cid,uidv){const c=getCourse(cid),u=unitOf(c,uidv);if(!u)return go('home');
  if(u.kind==='exam')return go('check',{lang:c.lang,uref:{id:c.id,uid:u.id},K:{stage:'intro',qs:null,ans:[],i:0,busy:false,err:'',fb:null}});
- go('unit',{id:cid,uid:uidv,U:{busy:false,err:''}});if(!u.setId||!getSet(u.setId)||!u.lesson)unitLoad()}
-async function unitLoad(){const c=getCourse(view.id),u=unitOf(c,view.uid),U=view.U;if(!u||U.busy)return;U.busy=true;U.err='';render();
- const TL=langName(c.lang);
+ go('unit',{id:cid,uid:uidv,U:{busy:false,err:''}});if(!u.setId||!getSet(u.setId)||!u.lesson)unitLoad();else unitPrefetch(c,u)}
+function unitPrompt(c,u){const TL=langName(c.lang);
  const prev=c.units.filter(x=>x.n<u.n&&x.setId).flatMap(x=>(getSet(x.setId)||{cards:[]}).cards.map(k=>k.t)).slice(-150).join(', ');
- try{const r=await ai(`Erstelle die Inhalte für eine Etappe eines ${TL}-Lernpfads für einen deutschsprachigen Erwachsenen (Niveau ${u.lvl}).
+ return `Erstelle die Inhalte für eine Etappe eines ${TL}-Lernpfads für einen deutschsprachigen Erwachsenen (Niveau ${u.lvl}).
 Etappe ${u.n}: „${u.title}“. Ziel: ${u.kann}. Grammatik: ${u.grammar}. Wortfeld: ${u.field}. Persönliches Ziel des Lerners: ${c.goal||'Alltag'}.
 ${prev?`Diese Wörter kennt er schon aus früheren Etappen, nimm sie nicht noch einmal: ${prev}.\n`:''}${weakHint(c.lang)?`Lass diese Schwachstellen in den Beispielsätzen nebenbei vorkommen: ${weakHint(c.lang)}.\n`:''}
 Antworte nur mit JSON:
 {"regel":"Erklärung des Grammatikthemas auf Deutsch, einfach und konkret, höchstens 6 kurze Sätze","beispiele":["3 bis 5 kurze Beispielsätze auf ${TL}, die die Regel und Wörter aus dem Wortfeld nutzen"],"uebersetzungen":["deutsche Übersetzung zu jedem Beispiel, gleiche Reihenfolge"],"karten":[{"t":"Wort auf ${TL} (Substantiv mit Artikel, Verb im Infinitiv)","d":"deutsche Übersetzung","ex":"kurzer Beispielsatz auf ${TL}"}]}
-„karten“: 10 bis 12 häufige, nützliche Wörter oder feste Wendungen zum Wortfeld, passend zum Niveau.`,{json:true,fresh:true});
-  const cards=(Array.isArray(r&&r.karten)?r.karten:[]).filter(x=>x&&x.t&&x.d).slice(0,14).map(x=>({...blank(),t:String(x.t).trim(),d:String(x.d).trim(),ex:String(x.ex||'').trim()}));
+„karten“: 10 bis 12 häufige, nützliche Wörter oder feste Wendungen zum Wortfeld, passend zum Niveau.`}
+const unitKey=(c,u)=>`unit|${profKey()}|${c.id}|${u.id}`;
+function unitCheckRaw(r){const n=(Array.isArray(r&&r.karten)?r.karten:[]).filter(x=>x&&x.t&&x.d).length;if(n<5)throw new AIError('Die Etappe konnte nicht erstellt werden. Versuch es nochmal.');return r}
+function unitApply(c,u,r){const cards=(Array.isArray(r&&r.karten)?r.karten:[]).filter(x=>x&&x.t&&x.d).slice(0,14).map(x=>({...blank(),t:String(x.t).trim(),d:String(x.d).trim(),ex:String(x.ex||'').trim()}));
   if(cards.length<5)throw new AIError('Die Etappe konnte nicht erstellt werden. Versuch es nochmal.');
   let s=u.setId&&getSet(u.setId);
   if(s){s.cards=s.cards.length?s.cards:cards;s.upd=now()}else{s={id:uid(),title:`${u.n}. ${u.title}`,l1:c.lang,l2:'de-DE',best:null,upd:now(),cards,course:c.id,unit:u.id};db.sets.push(s);u.setId=s.id}
   const bs=(Array.isArray(r.beispiele)?r.beispiele:[]).map(String),tr=(Array.isArray(r.uebersetzungen)?r.uebersetzungen:[]).map(String);
   u.lesson={regel:String(r.regel||''),bsp:bs.map((b,i)=>({b,de:tr[i]||''}))};c.upd=now();db.fresh=false;save()}
+// Nächste Etappe und die Grammatik-Übung dieser Etappe schon vorbereiten
+function unitPrefetch(c,u){if(!c||!u)return;
+ if(!u.lesson)stockFill(unitKey(c,u),async()=>unitCheckRaw(await aiQuiet(unitPrompt(c,u),{json:true,fresh:true})));
+ else{const nx=c.units.find(x=>x.n===u.n+1&&x.kind!=='exam'&&!x.lesson);if(nx)stockFill(unitKey(c,nx),async()=>unitCheckRaw(await aiQuiet(unitPrompt(c,nx),{json:true,fresh:true})))}
+ if(u.grammar)drillPrefetch(c.lang,{topic:u.grammar})}
+async function unitLoad(){const c=getCourse(view.id),u=unitOf(c,view.uid),U=view.U;if(!u||U.busy)return;U.busy=true;U.err='';render();
+ try{let r=stockTake(unitKey(c,u));if(!r)r=unitCheckRaw(await ai(unitPrompt(c,u),{json:true,fresh:true}));unitApply(c,u,r)}
  catch(e){U.err=e.message}
- U.busy=false;if(view.U===U)render()}
+ U.busy=false;if(view.U===U)render();if(u.lesson)unitPrefetch(c,u)}
 function vUnit(){const c=getCourse(view.id),u=unitOf(c,view.uid),U=view.U;if(!u)return go('home');
  const s=u.setId&&getSet(u.setId),TL=c.lang;
  let h=bar('course',c.title)+`<section class="set-head"><span class="label">Ordner ${u.lvl}${u.chapter?' · '+esc(u.chapter):''} · Etappe ${u.n}</span><h1>${esc(u.title)}</h1>${u.kann?`<p class="muted">${esc(u.kann)}</p>`:''}</section>`;
