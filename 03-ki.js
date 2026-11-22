@@ -158,13 +158,23 @@ function speechJudge(alts,answer){const forms=[answer,...String(answer).split(/\
 const IDK_RE=/^(ich )?wei(ß|ss) (ich |es )*nicht$|^keine ahnung$|^(überspringen|weiter|nächste)$|^i (don'?t|do not) know$|^(skip|pass|next)$|^no (lo )?s[eé]$|^je ne sais pas$|^non lo so$/i;
 const isIdk=a=>IDK_RE.test(norm(a));
 function options(s,c,dir){const k=dir==='t'?'t':'d';const others=shuffle([...new Set(s.cards.filter(x=>x.id!==c.id&&x[k]!==c[k]).map(x=>x[k]))]).slice(0,3);return shuffle([c[k],...others])}
+const flipDir=d=>d==='t'?'d':'t',itDir=it=>it&&it.rev?flipDir(prefs.dir):prefs.dir;
 function dirOf(s,c,dir=prefs.dir){return dir==='t'?{prompt:c.d,answer:c.t,askLang:s.l2,ansLang:s.l1}:{prompt:c.t,answer:c.d,askLang:s.l1,ansLang:s.l2}}
+
+// Lückensatz: Den Beispielsatz nehmen und das gesuchte Wort (auch gebeugt: flytta → flyttade) durch eine Lücke ersetzen
+function clozeOf(s,c){const tl=targetLang(s),term=String((tl===s.l1?c.t:c.d)||''),ex=String(c.ex||'').trim();if(!ex||ex.length>160)return null;
+ const base=term.replace(/\([^)]*\)/g,'').split(/\s*[\/;,]\s*/)[0].trim().toLowerCase().replace(ART,'').replace(/^(att|zu|å|to|om|sich|se|si)\s+/,'').trim();if(!base||base.length<2||base.split(/\s+/).length>3)return null;
+ const P=x=>plain(x.toLowerCase());let hit=null;
+ const one=w=>{const re=/[\p{L}\p{M}][\p{L}\p{M}'’\-]*/gu;let m,stem=P(w).slice(0,Math.max(4,w.length-2));
+  while((m=re.exec(ex))){const t=P(m[0]);if(t===P(w)||(w.length>=4&&t.startsWith(stem)&&t.length<=w.length+5))return {i:m.index,w:m[0]}}return null};
+ if(base.includes(' ')){const i=P(ex).indexOf(P(base));if(i>=0)hit={i,w:ex.slice(i,i+base.length)}}else hit=one(base);
+ if(!hit)return null;return {word:hit.w,sent:ex.slice(0,hit.i)+'___'+ex.slice(hit.i+hit.w.length),full:ex,base:term}}
 
 /* ---------- Bausteine ---------- */
 function faecher(s){const st=[0,0,0];s.cards.forEach(c=>st[stageOf(c)]++);const n=s.cards.length||1;
  return `<div class="faecher"><div class="fbar" role="img" aria-label="${st[2]} sitzen, ${st[1]} geübt, ${st[0]} neu"><i class="f2" style="width:${st[2]/n*100}%"></i><i class="f1" style="width:${st[1]/n*100}%"></i></div>
  <div class="flegend"><span><i class="dot f2"></i><b>${st[2]}</b> sitzen</span><span><i class="dot f1"></i><b>${st[1]}</b> geübt</span><span><i class="dot f0"></i><b>${st[0]}</b> neu</span></div></div>`}
-function pill(c){if(isDue(c))return '<span class="pill due">fällig</span>';if(c.lv>=1)return `<span class="pill m2" title="Nächste Wiederholung ${relDay(c.due)}">Fach ${c.lv}</span>`;return c.m>=1?'<span class="pill m1">geübt</span>':'<span class="pill">neu</span>'}
+function pill(c){if(isWob(c))return '<span class="pill wob" title="Klappt oft nur knapp – kommt öfter dran">wackelig</span>';if(isDue(c)||isDueR(c))return '<span class="pill due">fällig</span>';if(c.lv>=1)return `<span class="pill m2" title="Nächste Wiederholung ${relDay(c.due)}">Fach ${c.lv}</span>`;return c.m>=1?'<span class="pill m1">geübt</span>':'<span class="pill">neu</span>'}
 const starBtn=(c,act='star')=>`<button class="starbtn ${c.star?'on':''}" data-act="${act}" data-cid="${c.id}" aria-pressed="${c.star}" aria-label="${c.star?'Markierung entfernen':'Markieren'}">${ICON.star}</button>`;
 const bar=(to,title='')=>`<header class="bar"><button class="back" data-act="back" data-to="${to}"><span aria-hidden="true">←</span> ${({home:'Startseite',unit:'Zur Etappe',course:'Zum Lernpfad',backup:'Einstellungen'})[to]||'Zum Set'}</button><div class="bar-title">${esc(title)}</div></header>`;
 const canSync=()=>STANDALONE&&!!prefs.ghToken;

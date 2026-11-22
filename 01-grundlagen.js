@@ -65,7 +65,7 @@ function sample(){
   {id:'bsp-es',title:'Spanisch – Erste Schritte',l1:'es-ES',l2:'de-DE',best:null,upd:0,cards:es.map((x,i)=>mk('es',i,...x))}
  ];
 }
-function migrate(d){d.v=2;d.deleted=d.deleted||{};d.log=d.log||{};d.sets=d.sets||[];d.prof=d.prof||{};d.courses=d.courses||[];d.me=d.me||{gull:'',name:'',upd:0};if(d.me.gull&&d.me.onb==null)d.me.onb=true;d.watch=d.watch||{};d.logD=d.logD||{};d.focus=d.focus||{};d.slain=d.slain||[];d.kid=d.kid||{c:{}};
+function migrate(d){d.v=2;d.deleted=d.deleted||{};d.log=d.log||{};d.sets=d.sets||[];d.prof=d.prof||{};d.courses=d.courses||[];d.me=d.me||{gull:'',name:'',upd:0};if(d.me.gull&&d.me.onb==null)d.me.onb=true;d.watch=d.watch||{};d.logD=d.logD||{};d.focus=d.focus||{};d.slain=d.slain||[];d.kid=d.kid||{c:{}};d.crew=d.crew||{share:false,gist:'',codes:[],upd:0};
  d.sets.forEach(s=>{s.upd=s.upd||0;s.best=s.best||null;s.cards=s.cards||[];s.cards.forEach(c=>{c.m=c.m||0;if(c.lv==null){c.lv=c.m>=2?1:0;c.due=c.lv?Date.now():0}c.due=c.due||0;c.u=c.u||0;c.ex=c.ex||'';c.star=!!c.star})});return d}
 const PROF_KEY='vokabelkoje.profiles';
 let profs=(()=>{try{const p=JSON.parse(localStorage.getItem(PROF_KEY));if(p&&Array.isArray(p.list)&&p.list.length)return p}catch(e){}return {list:[{id:'main',name:'',color:0,ai:true,upd:0}],active:'main'}})();
@@ -83,9 +83,14 @@ function dayStart(t=now()){const d=new Date(t);d.setHours(0,0,0,0);return d.getT
 const dayKey=(t=now())=>{const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const sched=lv=>dayStart()+INT[Math.min(lv,INT.length-1)]*DAY+3*36e5;
 const isDue=c=>c.lv>=1&&c.due<dayStart()+DAY;
+// Umgekehrte Richtung (selbst in der Fremdsprache antworten): eigener Fach-Stand in c.r, startet, sobald die Karte sitzt
+const isDueR=c=>!!(c.r&&c.r.lv>=1&&c.r.due<dayStart()+DAY);
+// Wackelkandidaten: Karten, die oft nur knapp, langsam oder mit Fehler klappen
+const WOB=3,isWob=c=>(c.wob||0)>=WOB;
 const stageOf=c=>c.lv>=1?2:Math.min(1,c.m||0);
-const dueCount=s=>s.cards.filter(isDue).length;
-function allDue(){const r=[];db.sets.filter(inLang).forEach(s=>s.cards.forEach(c=>{if(isDue(c))r.push({sid:s.id,cid:c.id})}));return r}
+const dueCount=s=>s.cards.reduce((n,c)=>n+(isDue(c)?1:0)+(isDueR(c)?1:0),0);
+function dueItems(s,cards=s.cards){const r=[];cards.forEach(c=>{if(isDue(c))r.push({sid:s.id,cid:c.id});if(isDueR(c))r.push({sid:s.id,cid:c.id,rev:true})});return r}
+function allDue(){const r=[];db.sets.filter(inLang).forEach(s=>r.push(...dueItems(s)));return r}
 const touch=c=>{c.u=now()};
 // Antworten pro Tag UND Gerät zählen: Beim Abgleich addieren sich Handy und PC, statt dass nur der größere Wert zählt
 const DEV=(()=>{if(!prefs.dev){prefs.dev=uid();savePrefs()}return prefs.dev})();
@@ -94,5 +99,11 @@ function relDay(t){const d=Math.round((dayStart(t)-dayStart())/DAY);return d<=0?
 function ago(t){const m=Math.round((now()-t)/6e4);return m<1?'gerade eben':m<60?`vor ${m} Min.`:m<1440?`vor ${Math.round(m/60)} Std.`:`am ${new Date(t).toLocaleDateString('de-DE')}`}
 
 /* Lernstand bewerten. Rückgabe: true = in dieser Runde nochmal fragen */
-function gradeLearn(c,ok){touch(c);if(ok){c.m=(c.m||0)+1;if(c.m>=2){c.lv=1;c.due=sched(1);return false}return true}c.m=0;return true}
-function gradeReview(c,ok,failed){touch(c);if(ok){c.lv=failed?1:Math.min(c.lv+1,INT.length-1);c.due=sched(c.lv);return false}return true}
+function gradeLearn(c,ok){touch(c);if(ok){c.m=(c.m||0)+1;if(c.m>=2){c.lv=1;c.due=sched(1);if(!c.ls)c.ls=now();return false}return true}c.m=0;return true}
+// Wackelige Karten steigen nicht ins nächste Fach, bis sie wieder sicher sitzen
+function gradeReview(c,ok,failed){touch(c);if(ok){c.lv=failed?1:isWob(c)&&c.lv>=2?c.lv:Math.min(c.lv+1,INT.length-1);c.due=sched(c.lv);
+  if(!c.r&&c.lv>=2)c.r={lv:1,due:now()}; // sitzt: ab jetzt auch andersherum
+  return false}return true}
+function gradeRev(c,ok,failed){touch(c);const r=c.r||(c.r={lv:1,due:0});if(ok){r.lv=failed?1:Math.min(r.lv+1,INT.length-1);r.due=sched(r.lv);return false}return true}
+// Wackel-Wert: Fehler und Lösungshilfe +2, knapp oder langsam +1, sicher und flott −1
+function wobble(c,res,ms){let w=c.wob||0;if(!res.ok)w+=2;else if(res.hint||ms>12000)w+=1;else w-=1;c.wob=Math.max(0,Math.min(6,w))}

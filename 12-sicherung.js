@@ -53,7 +53,7 @@ async function saveBackup(){prefs.lastBackup=now();savePrefs();
   view.dump=data;render();return}
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();
  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);toast('Sicherung gespeichert')}
-function applyMerged(remote){const m=merge(db,migrate(remote));db.sets=m.sets;db.deleted=m.deleted;db.log=m.log;db.logD=m.logD;db.focus=m.focus;db.prof=m.prof;db.courses=m.courses;db.me=m.me;db.watch=m.watch;db.slain=m.slain;db.kid=m.kid}
+function applyMerged(remote){const m=merge(db,migrate(remote));db.sets=m.sets;db.deleted=m.deleted;db.log=m.log;db.logD=m.logD;db.focus=m.focus;db.prof=m.prof;db.courses=m.courses;db.me=m.me;db.watch=m.watch;db.slain=m.slain;db.kid=m.kid;db.crew=m.crew}
 $('#file-in').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
  try{const d=JSON.parse(await f.text());
   if(d&&d.profiles&&d.data){mergeProfs(d.profiles);Object.entries(d.data).forEach(([id,pd])=>{if(!pd||!Array.isArray(pd.sets))return;
@@ -67,7 +67,7 @@ $('#file-in').addEventListener('change',async e=>{const f=e.target.files[0];e.ta
 $('#cam-in').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f&&view.name==='listen')photoWhat(f)});
 $('#img-in').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f||view.name!=='edit')return;
  view.draft.aiImg=await shrink(f);view.draft.aiOpen=true;render();toast('Foto ausgewählt. Tippe auf „Karten erzeugen“.')});
-const PROG=['m','lv','due','star','u'];
+const PROG=['m','lv','due','star','u','r','wob','ls'];
 function mergeSet(x,y){const [n,o]=(x.upd||0)>=(y.upd||0)?[x,y]:[y,x];const om=new Map(o.cards.map(c=>[c.id,c]));
  const cards=n.cards.map(c=>{const d=om.get(c.id);if(d&&(d.u||0)>(c.u||0)){const r={...c};PROG.forEach(k=>r[k]=d[k]);return r}return c});
  const bests=[x.best,y.best].filter(Boolean);return {...n,cards,best:bests.length?Math.min(...bests):null}}
@@ -81,7 +81,7 @@ function merge(a,b){const deleted={...(b.deleted||{})};Object.entries(a.deleted|
  const cm=new Map();[...(a.courses||[]),...(b.courses||[])].forEach(c=>{const o=cm.get(c.id);cm.set(c.id,o?mergeCourse(o,c):c)});
  const courses=[...cm.values()].filter(c=>!(deleted[c.id]>=(c.upd||0)));
  const ma=a.me||{},mb=b.me||{};
- return {sets,deleted,log,logD,focus:(()=>{const f={...(b.focus||{})};Object.entries(a.focus||{}).forEach(([l,x])=>{const o=f[l];f[l]=!o||x.day>o.day||x.day===o.day&&(x.rounds||0)>=(o.rounds||0)?x:o});return f})(),prof:mergeProf(a.prof,b.prof),courses,me:(ma.upd||0)>=(mb.upd||0)?{gull:'',name:'',upd:0,...ma}:{gull:'',name:'',upd:0,...mb},watch:{...(b.watch||{}),...(a.watch||{})},kid:(()=>{const c={...((b.kid||{}).c||{})};Object.entries((a.kid||{}).c||{}).forEach(([k,v])=>c[k]=Math.max(v,c[k]||0));return {c}})(),slain:(()=>{const mm=new Map();[...(a.slain||[]),...(b.slain||[])].forEach(x=>mm.set(x.t+'|'+x.m,x));return [...mm.values()].sort((x,y)=>x.t-y.t)})()}}
+ return {sets,deleted,log,logD,focus:(()=>{const f={...(b.focus||{})};Object.entries(a.focus||{}).forEach(([l,x])=>{const o=f[l];f[l]=!o||x.day>o.day||x.day===o.day&&(x.rounds||0)>=(o.rounds||0)?x:o});return f})(),prof:mergeProf(a.prof,b.prof),courses,me:(ma.upd||0)>=(mb.upd||0)?{gull:'',name:'',upd:0,...ma}:{gull:'',name:'',upd:0,...mb},watch:{...(b.watch||{}),...(a.watch||{})},kid:(()=>{const c={...((b.kid||{}).c||{})};Object.entries((a.kid||{}).c||{}).forEach(([k,v])=>c[k]=Math.max(v,c[k]||0));return {c}})(),crew:(()=>{const x=a.crew,y=b.crew;return x&&y?((x.upd||0)>=(y.upd||0)?x:y):(x||y||{share:false,gist:'',codes:[],upd:0})})(),slain:(()=>{const mm=new Map();[...(a.slain||[]),...(b.slain||[])].forEach(x=>mm.set(x.t+'|'+x.m,x));return [...mm.values()].sort((x,y)=>x.t-y.t)})()}}
 // Lernpfade feldweise zusammenführen: Was auf einem Gerät geschafft wurde, bleibt geschafft
 const U_RANK={locked:0,open:1,done:2};
 function mergeUnit(x,y){const n=(y.upd||0)>(x.upd||0)?{...x,...y}:{...y,...x};
@@ -120,12 +120,14 @@ let syncing=false,syncAgain=false;
 async function sync(){if(!canSync()||learnOffline())return;if(syncing){syncAgain=true;return}syncing=true;clearTimeout(syncTimer);
  try{const id=await findGist();let g;try{g=await gh('/gists/'+id)}catch(e){if(/Gist-Berechtigung/.test(e.message)){prefs.gistId='';savePrefs()}throw e}
   const pf=g.files&&g.files[PFILE];if(pf){try{mergeProfs(JSON.parse(pf.truncated?await (await fetch(pf.raw_url)).text():pf.content))}catch(e){}}
+  try{crewFromGist(g)}catch(e){}
   const f=g.files&&g.files[syncFile()];
   if(f){const txt=f.truncated?await (await fetch(f.raw_url)).text():f.content;let remote=null;try{remote=JSON.parse(txt)}catch(e){}
    if(remote&&Array.isArray(remote.sets)){if(db.fresh&&remote.sets.length){db=migrate({...remote,fresh:false})}else applyMerged(remote);save(true)}}
   dirty=false;
   await gh('/gists/'+id,{method:'PATCH',body:JSON.stringify({files:{[syncFile()]:{content:JSON.stringify(payload())},[PFILE]:{content:JSON.stringify(profs.list)}}})});
   prefs.lastSync=now();prefs.syncErr='';savePrefs();
+  crewPublish();
   if(['home','set','backup'].includes(view.name)&&!view.confirm&&!busyTyping())render();
  }catch(e){prefs.syncErr=e.message||'Keine Verbindung';savePrefs();if(['home','backup'].includes(view.name)&&!busyTyping())render()}
  finally{syncing=false;if(syncAgain){syncAgain=false;setTimeout(sync,1500)}}}

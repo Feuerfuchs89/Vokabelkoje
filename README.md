@@ -98,6 +98,12 @@ Kinderprofile brauchen keinen Schlüssel und keine KI.
 **Mehrere Personen auf einem Gerät:** Pro Person ein eigenes Profil anlegen (oben rechts aufs Profilbild).
 Jedes Profil hat eigene Sprachen, Lernpfade, Möwe und Fortschritt.
 
+## Crew-Wettbewerb
+Unter „Profil“ → „Crew-Wettbewerb“ siehst du, wer diese Woche vorn liegt (Wache 30 Punkte, neues Wort 5, Antwort 1; montags geht es neu los).
+- **Profile auf deinem Konto** sind automatisch dabei.
+- **Familie oder Freunde mit eigenem Konto:** Beide setzen den Haken „Meine Wochenzahlen teilen“ und schicken sich ihren **Crew-Code**. Den Code des anderen trägst du unter „Crew-Code eines anderen“ ein.
+- Geteilt werden nur Name und Wochenzahlen in einem eigenen kleinen Gist – keine Wörter, keine Schlüssel. Der Crew-Code ist **nicht** dein GitHub-Token und kein Kopplungslink.
+
 ## Auf GitHub Pages bringen
 
 1. Auf GitHub ein neues Repository anlegen, z. B. `Vokabelkoje` (öffentlich).
@@ -156,6 +162,12 @@ Portugiesisch, Kroatisch, Polnisch.
   Ein Fehler schickt das Wort zurück in Fach 1. Auf der Startseite steht, was heute fällig ist.
 - **Freihändig:** Die App liest vor, du antwortest laut. „Weiß nicht“ sagen geht auch.
 - **Tagesziel und Serie:** Zählt jede Antwort. Das Ziel stellst du unter „Einstellungen“ ein.
+- **Andersrum:** Sitzt ein Wort (ab Fach 2), fragt die App es zusätzlich in der anderen Richtung ab – dann antwortest du selbst in der Fremdsprache. Diese Richtung hat einen eigenen Fach-Stand.
+- **Im Satz:** Gut sitzende Wörter mit Beispielsatz kommen manchmal als Lückensatz. Die Form im Satz zählt voll, die Grundform als „knapp richtig“.
+- **Wackelig:** Wörter, die oft nur mit Fehler, Hilfe oder langsam klappen, bekommen das Schild „wackelig“. Sie bleiben in ihrem Fach, bis sie wieder sicher sitzen, und kommen bei der Mini-Wache zuerst.
+- **Mini-Wache:** 5 Karten in etwa einer Minute – für zwischendurch. Dreimal am Tag kurz bringt mehr als einmal lang.
+- **Wochenrückblick:** Sonntags und montags zeigt die Möwe deine letzten 7 Tage und die hartnäckigsten Wörter. Mit einem Tipp übst du sie im Schnack oder als Mini-Wache. Jederzeit auch unter „Profil“.
+- **Wörter zu einem Thema:** Unter „Sets“ ein Thema eingeben (z. B. Segeln) – die KI macht ein Set mit Beispielsätzen auf deinem Niveau.
 
 ## Profile und Sprachen
 

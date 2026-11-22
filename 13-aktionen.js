@@ -4,7 +4,7 @@ function startMode(m){const s=getSet(view.id);
  if(m==='flash')startFlash(s);else if(m==='learn')startLearn(s);else if(m==='test')go('test',{id:s.id,T:null});else if(m==='match')startMatch(s);else if(m==='hands')startHands(s);else if(m==='reader')startReader(s);else if(m==='talk')startTalk(s);else if(m==='dict')startDict(s);else if(m==='pron')startPron(s)}
 function curCard(){if(view.name==='q'&&view.Q.cur)return card(getSet(view.Q.cur.sid),view.Q.cur.cid);if(view.name==='flash')return card(getSet(view.id),view.f.order[view.f.i]);return null}
 function toggleStar(c){if(!c)return;c.star=!c.star;touch(c);save();render()}
-function expectedFor(target){if(target==='q-in'&&view.Q&&view.Q.cur){const s=getSet(view.Q.cur.sid);return dirOf(s,card(s,view.Q.cur.cid)).answer}
+function expectedFor(target){if(target==='q-in'&&view.Q&&view.Q.cur){return qAnswerOf(view.Q).answer}
  if(/^tq\d+$/.test(target)&&view.T){const q=view.T.qs[+target.slice(2)];return q&&q.answer}
  if(target==='dr-in'&&view.D&&view.D.data){const t=view.D.data.tasks[view.D.i];if(!t)return null;const g=t.gaps?t.gaps[view.D.g||0]:t.sol;return g&&g.join(' / ')}return null}
 const acts={
@@ -18,7 +18,15 @@ const acts={
  edit:()=>{const s=getSet(view.id);go('edit',{id:s.id,draft:JSON.parse(JSON.stringify(s))})},
  mode:b=>startMode(b.dataset.m),
  'review-all':()=>startReview(allDue(),'home'),
- 'review-set':()=>{const s=getSet(view.id);startReview(pool(s).filter(isDue).map(c=>({sid:s.id,cid:c.id})),'set',s.id)},
+ 'review-set':()=>{const s=getSet(view.id);startReview(dueItems(s,pool(s)),'set',s.id)},
+ mini:()=>startMini(),
+ week:()=>go('week'),crew:()=>{go('crew',{C:{}});if(db.crew.share&&!db.crew.gist)crewPublish()},
+ 'week-hide':()=>{prefs.weekSeen=curWeek();savePrefs();render()},
+ 'week-chat':()=>startGullChat(wobList(activeLang()).slice(0,4).map(({s,c})=>termOf(s,c))),
+ 'week-mini':()=>{const it=wobList(activeLang()).slice(0,5).map(({s,c})=>({sid:s.id,cid:c.id}));if(it.length)startReview(it,'home',null,true)},
+ 'tp-pick':b=>{const i=$('#tp-topic');if(i){i.value=b.dataset.t;i.focus()}},
+ 'crew-copy':async()=>{try{await navigator.clipboard.writeText(db.crew.gist);toast('Crew-Code kopiert – schick ihn deiner Crew')}catch(e){const i=$('#crew-code');if(i){i.select();toast('Code markiert – jetzt kopieren')}}},
+ 'crew-del':b=>{db.crew.codes=(db.crew.codes||[]).filter(x=>x.id!==b.dataset.id);db.crew.upd=now();save();render()},
  'star-only':()=>{starOnly[view.id]=!starOnly[view.id];render()},
  star:b=>toggleStar(card(getSet(view.id),b.dataset.cid)),
  'cur-star':()=>toggleStar(curCard()),
@@ -138,7 +146,7 @@ const acts={
  'dr-opt':b=>{const D=view.D,t=D.data.tasks[D.i],j=+b.dataset.j;drillAnswer({ok:j===t.a,pick:j})},
  'dr-next':()=>drillNext(),
  'dr-help':()=>{const D=view.D;if(!D||D.res)return;const t=D.data.tasks[D.i];if(!t||t.typ!=='luecke')return;D.help=D.help||{lv:0};helpStep(D.help,t.gaps[D.g||0][0])},
- 'q-help':()=>{const Q=view.Q;if(!Q||Q.res||!Q.cur)return;const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);if(!c)return;Q.help=Q.help||{lv:0};helpStep(Q.help,dirOf(s,c).answer)},
+ 'q-help':()=>{const Q=view.Q;if(!Q||Q.res||!Q.cur)return;const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);if(!c)return;Q.help=Q.help||{lv:0};helpStep(Q.help,qAnswerOf(Q).answer)},
  tw:b=>lupeOpen(b.dataset.k,b.dataset.i,b),
  'lupe-close':()=>lupeClose(),
  'lupe-retry':()=>lupeLookup(true),
@@ -204,6 +212,7 @@ const acts={
  'sync-off':()=>{prefs.ghToken='';prefs.gistId='';prefs.syncErr='';prefs.lastSync=0;savePrefs();render();toast('Abgleich getrennt')}
 };
 app.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||b.disabled)return;const f=acts[b.dataset.act];if(f){e.preventDefault();f(b,e)}});
+app.addEventListener('change',e=>{const el=e.target;if(el&&el.id==='crew-share'){db.crew.share=el.checked;db.crew.upd=now();save();render();if(el.checked)crewPublish()}});
 app.addEventListener('input',e=>{const el=e.target;
  if(view.name==='voices'){if(el.id==='v-rate'){prefs.rate=+el.value;$('#v-rate-l').textContent=rateLabel(prefs.rate)}else if(el.dataset.voice){prefs.voices=prefs.voices||{};prefs.voices[el.dataset.voice]=el.value}savePrefs()}
  if(view.name==='backup'&&el.id==='goal'){db.me={...db.me,goal:+el.value,upd:now()};save()}
@@ -215,10 +224,14 @@ app.addEventListener('input',e=>{const el=e.target;
  if(view.name==='edit'){const d=view.draft;if(el.dataset.k)d[el.dataset.k]=el.type==='checkbox'?el.checked:el.value;else if(el.dataset.f)d.cards[+el.dataset.i][el.dataset.f]=el.value}});
 app.addEventListener('toggle',e=>{const d=e.target;if(view.name==='course'&&d&&d.dataset&&d.dataset.lv){view.openLv=view.openLv||{};view.openLv[d.dataset.lv]=d.open}},true);
 app.addEventListener('submit',e=>{e.preventDefault();const id=e.target.id;
- if(id==='q-form'&&!view.Q.res){const s=getSet(view.Q.cur.sid),c=card(s,view.Q.cur.cid),v=$('#q-in').value;if(!v.trim())return;const r=check(v,dirOf(s,c).answer),helped=(view.Q.help&&view.Q.help.lv)===2;qAnswer(helped?{ok:false,helped:true,input:v}:{ok:r>0,hint:r===1,input:v})}
+ if(id==='q-form'&&!view.Q.res){const s=getSet(view.Q.cur.sid),c=card(s,view.Q.cur.cid),v=$('#q-in').value;if(!v.trim())return;const r=qCheck(view.Q,v),helped=(view.Q.help&&view.Q.help.lv)===2;qAnswer(helped?{ok:false,helped:true,input:v}:{ok:r>0,hint:r===1,input:v})}
+ if(id==='tp-form'){topicPack($('#tp-topic').value,+$('#tp-n').value||15);return}
+ if(id==='crew-form'){const v=($('#crew-add').value||'').trim().replace(/^.*gist\.github\.com\/(?:[^/]+\/)?/,'').replace(/[^0-9a-f]/gi,'');const C=view.C;
+  if(!/^[0-9a-f]{20,40}$/i.test(v)){C.err='Das sieht nicht wie ein Crew-Code aus.';return render()}if(v===db.crew.gist){C.err='Das ist dein eigener Code.';return render()}
+  if(!db.crew.codes.some(x=>x.id===v)){db.crew.codes.push({id:v,name:''});db.crew.upd=now();save()}C.err='';render();crewFetch(true);return}
  if(id==='q-edit'){const Q=view.Q,s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);const t=$('#qe-t').value.trim(),d=$('#qe-d').value.trim();if(!t||!d)return toast('Begriff und Definition dürfen nicht leer sein');
-  const oldAns=dirOf(s,c).answer;c.t=t;c.d=d;c.ex=$('#qe-x').value.trim();s.upd=now();save();Q.editing=false;
-  if(Q.type==='mc'){const newAns=dirOf(s,c).answer;Q.opts=Q.opts.map(o=>o===oldAns?newAns:o)}
+  const oldAns=dirOf(s,c,itDir(Q.cur)).answer;c.t=t;c.d=d;c.ex=$('#qe-x').value.trim();s.upd=now();save();Q.editing=false;
+  if(Q.type==='mc'){const newAns=dirOf(s,c,itDir(Q.cur)).answer;Q.opts=Q.opts.map(o=>o===oldAns?newAns:o)}
   render();toast('Karte gespeichert')}
  if(id==='ts-form'&&view.T&&!view.T.submitted)testSubmit();
  if(id==='dr-form'&&view.D&&!view.D.res){const D=view.D,v=$('#dr-in').value;if(!v.trim())return;const t=D.data.tasks[D.i],gs=t.gaps||[t.sol],gi=D.g||0;

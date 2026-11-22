@@ -52,7 +52,7 @@ function vHome(){
  const t=view.tab||lastTab||'today';lastTab=t;view.tab=t;const L=activeLang();
  let h=topbar();
  if(t==='today'){
-  h+=`${langBar()}${safetyBanner()}${deck()}${gotCard()}${focusCard()}${freeTalkCard()}
+  h+=`${langBar()}${safetyBanner()}${deck()}${weekTeaser()}${crewTeaser()}${gotCard()}${focusCard()}${freeTalkCard()}
   ${langEmpty(L)?`<div class="note stack"><span>Für ${langName(L)} gibt es noch nichts.</span><div class="btn-row">${aiOK()?'<button class="btn sm primary" data-act="course-new">Lernpfad von null an</button>':''}<button class="btn sm" data-act="new">Eigenes Set anlegen</button></div></div>`:''}
   ${aiOK()?levelCard():''}`}
  else if(t==='map'){const c=activeCourse();
@@ -63,13 +63,15 @@ function vHome(){
   h+=`${db.fresh?`<p class="note">Zwei Beispielsets sind schon drin. Du kannst sie bearbeiten, löschen oder einfach ein neues Set anlegen.</p>`:''}
   ${quickStart(L)}<section class="sets"><h2>Eigene Sets${L?' · '+langName(L):''}</h2>${db.sets.filter(s=>!s.course&&inLang(s)&&!(s.talk&&!s.cards.length)).map(s=>{const d=dueCount(s);return `<button class="set-row" data-act="open" data-id="${s.id}"><div class="set-top"><div><div class="set-title">${esc(s.title)}</div><div class="set-meta">${s.cards.length} Begriffe · ${langName(s.l1)} ↔ ${langName(s.l2)}</div></div>${d?`<span class="due-chip">${d} fällig</span>`:''}</div>${faecher(s)}</button>`}).join('')||'<p class="note">Noch keine eigenen Sets in dieser Sprache.</p>'}</section>
   <button class="btn primary wide" data-act="new">Neues Set anlegen</button>
+  ${topicPackForm(L)}
   <section class="stack"><h2>Werkzeugkiste</h2><div class="modes">
   <button class="mode" data-act="listen">${ICON.say}<b>Übersetzen &amp; anhören</b><span>Wort, Satz oder Foto: übersetzen, anhören, ins Set legen.</span></button>
   ${aiOK()&&L&&L!=='de-DE'?`<button class="mode" data-act="yarn" ${learnOffline()?'disabled':''}>${ICON.reader||ICON.say}<b>Seemannsgarn</b><span>${esc(gullName())} erzählt eine Geschichte aus deinen Wörtern.</span></button>`:''}</div>
   <p class="hint">Hördiktat und Aussprache findest du in jedem Set.</p></section>`}
  else{const p=curProf()||{},sl=slainList().length;
   h+=`<section class="today"><div class="row-between" style="justify-content:flex-start;gap:14px">${avatar(p,true)}<div class="u-body"><b style="font-size:1.2rem">${esc(p.name||'Ohne Namen')}</b><span class="hint">Möwe: ${esc(gullName())} · ${streak()} Tage auf Kurs</span></div></div>
-  <div class="btn-row"><button class="btn" data-act="profiles">Profile verwalten</button><button class="btn" data-act="trophies">Trophäen (${sl})</button></div></section>
+  <div class="btn-row"><button class="btn" data-act="profiles">Profile verwalten</button><button class="btn" data-act="trophies">Trophäen (${sl})</button></div>
+  <div class="btn-row"><button class="btn" data-act="week">Wochenrückblick</button><button class="btn" data-act="crew">Crew-Wettbewerb</button></div></section>
   ${(db.courses||[]).some(c=>c.lang===activeLang())?`<section class="stack"><h2>Logbücher</h2>${db.courses.filter(c=>c.lang===activeLang()).map(c=>`<button class="set-row" data-act="logbook" data-id="${c.id}"><div class="set-title">${esc(c.title)}</div><div class="set-meta">${langName(c.lang)} · ${c.units.filter(u=>u.status==='done').length} Häfen angelaufen</div></button>`).join('')}</section>`:''}
   ${safetyBanner()}
   <div class="btn-row"><button class="btn" data-act="voices">Ton und Stimmen</button><button class="btn" data-act="backup">Einstellungen und Sicherung</button></div>
@@ -208,3 +210,91 @@ Antworte nur mit einem JSON-Array: [{"t":"Wort oder kurzer Satz auf ${TL} (Subst
   if(list.length<5)throw new AIError('Die KI hat zu wenig geliefert. Versuch es nochmal.');
   qsBusy=false;const s=makeStarterSet(L,list,'Erste Schritte');toast(`${list.length} Grundlagen für ${TL} angelegt`);go('set',{id:s.id})}
  catch(e){qsBusy=false;qsErr=e.message;render()}}
+
+/* ---------- Wochenzahlen ---------- */
+function weekStart(t=now()){const d=new Date(dayStart(t)),wd=(d.getDay()+6)%7;return dayStart(d.getTime()-wd*DAY+12*36e5)}
+const curWeek=()=>dayKey(weekStart());
+function statsOf(d,from,to=now()){d=d||{};let answers=0;for(let i=0;i<8;i++){const t=dayStart(from+i*DAY+12*36e5);if(t>to)break;answers+=(d.log||{})[dayKey(t)]||0}
+ const watches=(d.slain||[]).filter(x=>x.t>=from&&x.t<to).length;let words=0,got=0;
+ (d.sets||[]).forEach(s=>(s.cards||[]).forEach(c=>{if(c.ls>=from&&c.ls<to)words++;if(c.got>=from&&c.got<to)got++}));
+ return {answers,watches,words,got,pts:answers+watches*30+words*5}}
+const wobList=L=>{const r=[];db.sets.filter(s=>!L||targetLang(s)===L).forEach(s=>s.cards.forEach(c=>{if(isWob(c)&&c.lv>=1)r.push({s,c})}));return r.sort((a,b)=>(b.c.wob||0)-(a.c.wob||0))};
+const termOf=(s,c)=>targetLang(s)===s.l1?c.t:c.d;
+
+/* ---------- Wochenrückblick der Möwe ---------- */
+function weekTeaser(){const wd=new Date().getDay();if(!(wd===0||wd===1)||prefs.weekSeen===curWeek())return '';
+ return `<section class="note row-between" style="gap:10px"><span>📋 ${esc(gullName())} hat deinen Wochenrückblick fertig.</span><span class="btn-row"><button class="btn sm primary" data-act="week">Ansehen</button><button class="btn sm" data-act="week-hide" aria-label="Ausblenden">×</button></span></section>`}
+function vWeek(){prefs.weekSeen=curWeek();savePrefs();const L=activeLang(),t0=dayStart()-6*DAY,cur=statsOf(db,t0),prev=statsOf(db,t0-7*DAY,t0),si=streakInfo(),wob=wobList(L).slice(0,3);
+ const trend=prev.answers?Math.round((cur.answers-prev.answers)/prev.answers*100):null;
+ const say=cur.answers===0?'Diese Woche lag das Schiff im Hafen. Morgen legen wir wieder ab, ja?':trend!=null&&trend>=15?'Kräh! Mehr als letzte Woche – du bist gut im Wind.':trend!=null&&trend<=-30?'Etwas ruhiger diese Woche. Schon drei Mini-Wachen am Tag halten den Kurs.':'Gleichmäßig wie die Gezeiten. Genau so bleibt’s hängen.';
+ app.innerHTML=bar('home','Wochenrückblick')+`<section class="summary"><div class="victory">${gullSVG(cur.answers?'cheer':'idle',96)}</div><h1>Deine letzten 7 Tage</h1><p class="muted">${esc(gullName())}: „${say}“</p>
+ <div class="big-nums"><div><b class="g">${cur.answers}</b><span>Antworten${trend!=null?` <small class="${trend>=0?'g':'r'}">${trend>=0?'▲':'▼'} ${Math.abs(trend)} %</small>`:''}</span></div><div><b style="color:var(--signal)">${cur.watches}</b><span>Wachen</span></div><div><b>${cur.words}</b><span>neue Wörter sitzen</span></div>${cur.got?`<div><b>${cur.got}</b><span>gesammelt</span></div>`:''}</div>
+ <p class="hint">${si.n} ${si.n===1?'Tag':'Tage'} auf Kurs.</p></section>
+ <section class="panel"><h2>Die hartnäckigsten Wörter</h2>${wob.length?`<ul class="wob-list">${wob.map(({s,c})=>`<li><b lang="${short(targetLang(s))}">${esc(termOf(s,c))}</b> <span class="muted">${esc(targetLang(s)===s.l1?c.d:c.t)}</span></li>`).join('')}</ul>
+  <div class="btn-row">${gullChatOK()?`<button class="btn primary" data-act="week-chat">Schnack mit ${esc(gullName())} über diese Wörter</button>`:''}<button class="btn" data-act="week-mini">Mini-Wache damit</button></div>`
+  :'<p class="muted">Keine Wackelkandidaten – alles sitzt sicher. Stark!</p>'}</section>
+ <button class="btn wide" data-act="crew">Zum Crew-Wettbewerb</button>`}
+
+/* ---------- Themenpakete ---------- */
+const TP={busy:false,err:''};
+function topicPackForm(L){if(!aiOK()||!L||L==='de-DE')return '';
+ return `<form class="panel" id="tp-form" autocomplete="off"><h2>Wörter zu einem Thema</h2><p class="hint">Die KI macht dir ein Set mit Beispielsätzen auf deinem Niveau. Wörter, die du schon hast, lässt sie weg.</p>
+ <div class="write"><input id="tp-topic" maxlength="60" placeholder="z. B. Segeln, Hafen, Physio" aria-label="Thema" ${TP.busy?'disabled':''}><select id="tp-n" aria-label="Anzahl">${[10,15,25].map(n=>`<option ${n===15?'selected':''}>${n}</option>`).join('')}</select><button class="btn primary" ${TP.busy||learnOffline()?'disabled':''}>${TP.busy?'Erstelle …':'Los'}</button></div>
+ <div class="chips">${['Segeln','Im Hafen','Beim Physio','Mit Kindern','Im Garten','Wetter'].map(t=>`<button type="button" class="chip" data-act="tp-pick" data-t="${t}" ${TP.busy?'disabled':''}>${t}</button>`).join('')}</div>${TP.err?errHtml(TP.err):''}</form>`}
+async function topicPack(topic,n){const L=activeLang();topic=String(topic||'').trim();if(!topic)return toast('Gib ein Thema ein');if(TP.busy||!L)return;
+ adoptLevel(L);TP.busy=true;TP.err='';render();const TL=langName(L);
+ const have=[...new Set(db.sets.filter(s=>targetLang(s)===L).flatMap(s=>s.cards.map(c=>termOf(s,c))))].slice(0,200).join(', ');
+ try{const r=await ai(`Erstelle ${n} Vokabelkarten auf ${TL} zum Thema „${topic}“ für einen deutschsprachigen Erwachsenen (Niveau ${prefs.level}).
+Nimm häufige, im Alltag wirklich nützliche Wörter und feste Wendungen zu diesem Thema. Substantive mit Artikel, Verben im Infinitiv.${have?` Diese Wörter kennt er schon, lass sie weg: ${have}.`:''}
+„ex“ ist ein kurzer, natürlicher Beispielsatz auf ${TL}, der das Wort genau so enthält.
+Antworte nur mit JSON: [{"t":"Wort auf ${TL}","d":"deutsche Übersetzung","ex":"Beispielsatz auf ${TL}"}]`,{json:true,fresh:true});
+  const list=(Array.isArray(r)?r:(r&&Array.isArray(r.cards)?r.cards:[])).filter(x=>x&&x.t&&x.d).slice(0,n);
+  if(list.length<3)throw new AIError('Zu dem Thema kam nichts Brauchbares zurück. Versuch es etwas genauer.');
+  const s={id:uid(),title:topic.slice(0,1).toUpperCase()+topic.slice(1),l1:L,l2:'de-DE',best:null,upd:now(),cards:list.map(x=>({...blank(),t:String(x.t).trim(),d:String(x.d).trim(),ex:String(x.ex||'').trim(),got:now()}))};
+  db.sets.push(s);db.fresh=false;save();TP.busy=false;toast(`${s.cards.length} Wörter zu „${s.title}“ – viel Spaß!`);go('set',{id:s.id});return}
+ catch(e){TP.err=e.message||'Das hat nicht geklappt.'}
+ TP.busy=false;if(view.name==='home')render()}
+
+/* ---------- Crew-Wettbewerb ---------- */
+// Wer zählt: andere Profile auf diesem Konto (aus dem eigenen Gist) und Freunde/Familie mit eigenem Konto per Crew-Code
+const CREW_FILE='vokabelkoje-crew.json',crewRemote={};
+function crewFromGist(g){const out=prefs.crewProf||{},wk=curWeek(),from=weekStart();
+ Object.entries(g.files||{}).forEach(([name,f])=>{const m=/^vokabelkoje(?:-(.+))?\.json$/.exec(name);if(!m||name===PFILE||name===syncFile()||!f||f.truncated||!f.content)return;
+  try{const d=JSON.parse(f.content);out[m[1]||'main']={week:wk,stats:statsOf(d,from),t:now()}}catch(e){}});
+ prefs.crewProf=out;savePrefs()}
+function crewMembers(){const wk=curWeek(),from=weekStart(),me=curProf()||{},list=[{id:'me',me:true,name:me.name||(db.me&&db.me.name)||'Ich',color:me.color||0,stats:statsOf(db,from)}];
+ profs.list.filter(p=>!p.deleted&&p.id!==profs.active&&!p.kid).forEach(p=>{const loc=load(p.id),a=loc?statsOf(loc,from):null,g=(prefs.crewProf||{})[p.id],b=g&&g.week===wk?g.stats:null;if(!a&&!b)return;
+  const st={};['answers','watches','words','got','pts'].forEach(k=>st[k]=Math.max((a||{})[k]||0,(b||{})[k]||0));list.push({id:p.id,name:p.name||'Profil',color:p.color||0,stats:st})});
+ (db.crew.codes||[]).forEach(x=>{const r=crewRemote[x.id];list.push({id:x.id,remote:true,name:(r&&r.name)||x.name||'Crew',color:(r&&r.color)||0,stats:r&&r.week===wk?r.stats:{answers:0,watches:0,words:0,got:0,pts:0},err:r&&r.err,busy:r&&r.busy})});
+ return list.sort((a,b)=>b.stats.pts-a.stats.pts)}
+function crewTeaser(){const m=crewMembers();if(m.length<2)return '';const i=m.findIndex(x=>x.me);
+ return `<button class="set-row crew-row" data-act="crew"><div class="set-top"><span class="crew-ico" aria-hidden="true">⚓</span><div style="flex:1;min-width:0"><div class="set-title">Crew-Woche: Platz ${i+1} von ${m.length}</div><div class="set-meta">${i===0?'Du führst – halt den Kurs!':`${esc(m[0].name)} führt mit ${m[0].stats.pts} Punkten`}</div></div></div></button>`}
+async function crewFetch(force){const ids=(db.crew.codes||[]).map(x=>x.id);let did=0;
+ await Promise.all(ids.map(async id=>{const r=crewRemote[id]||(crewRemote[id]={});if(r.busy||(!force&&r.t&&now()-r.t<5*60*1000))return;r.busy=true;did++;
+  try{const res=await fetch('https://api.github.com/gists/'+encodeURIComponent(id),{headers:{'Accept':'application/vnd.github+json',...(prefs.ghToken?{'Authorization':'Bearer '+prefs.ghToken}:{})}});
+   if(!res.ok)throw new Error(res.status===404?'Code nicht gefunden':'GitHub antwortet nicht');const g=await res.json(),f=g.files&&g.files[CREW_FILE];if(!f)throw new Error('Kein Crew-Code');
+   const d=JSON.parse(f.content);Object.assign(r,{name:String(d.name||'Crew').slice(0,24),color:+d.color||0,week:d.week,stats:d.stats||{},err:'',t:now()});
+   const x=db.crew.codes.find(c=>c.id===id);if(x&&x.name!==r.name){x.name=r.name;db.crew.upd=now();save(true)}}
+  catch(e){r.err=e.message||'Nicht erreichbar';r.t=now()}r.busy=false}));
+ if(did&&(view.name==='crew'||view.name==='home'))render()}
+let crewPubBusy=false;
+async function crewPublish(){if(!db.crew||!db.crew.share||!canSync()||learnOffline()||crewPubBusy)return;const me=curProf()||{};
+ const body={v:1,name:me.name||(db.me&&db.me.name)||'Crew',color:me.color||0,week:curWeek(),stats:statsOf(db,weekStart()),t:now()},sig=JSON.stringify([body.name,body.week,body.stats]);
+ if(prefs.crewSig===sig+db.crew.gist&&db.crew.gist)return;crewPubBusy=true;
+ try{const files={[CREW_FILE]:{content:JSON.stringify(body)}};
+  if(db.crew.gist){try{await gh('/gists/'+db.crew.gist,{method:'PATCH',body:JSON.stringify({files})})}catch(e){if(/Berechtigung|404/.test(e.message)){db.crew.gist=''}else throw e}}
+  if(!db.crew.gist){const g=await gh('/gists',{method:'POST',body:JSON.stringify({description:'Vokabelkoje – Crew-Wochenstand',public:false,files})});db.crew.gist=g.id;db.crew.upd=now();save(true)}
+  prefs.crewSig=sig+db.crew.gist;savePrefs()}catch(e){}
+ crewPubBusy=false;if(view.name==='crew')render()}
+function vCrew(){const C=view.C||(view.C={});const m=crewMembers(),wd=(new Date().getDay()+6)%7,left=6-wd;
+ const lead=m[0],me=m.find(x=>x.me),say=m.length<2?'Allein auf See ist’s still. Hol dir eine Crew dazu!':lead.me?(lead.stats.pts?'Du stehst ganz vorn am Bug. Halt den Kurs!':'Noch hat keiner abgelegt. Mach den ersten Zug!'):`${lead.name} liegt vorn. ${me.stats.pts+30>=lead.stats.pts?'Eine Wache, und du ziehst vorbei!':'Mit ein paar Mini-Wachen holst du auf.'}`;
+ let h=bar('home','Crew-Wettbewerb')+`<section class="gull-row" style="margin:6px 0 4px">${gullSVG(m.length>1?'cheer':'idle',70)}<div class="bubble"><span class="gull-name">${esc(gullName())}</span><p>${esc(say)}</p></div></section>
+ <section class="panel"><div class="row-between"><h2>Diese Woche</h2><span class="hint">${left?`noch ${left} ${left===1?'Tag':'Tage'}`:'letzter Tag'}</span></div>
+ <ol class="crew-list">${m.map((x,i)=>`<li class="${x.me?'me':''}"><span class="crew-rank">${i===0&&x.stats.pts?'👑':i+1}</span>${avatar({name:x.name,color:x.color})}<div class="u-body"><b>${esc(x.name)}${x.me?' (du)':''}</b><span class="hint">${x.busy?'lädt …':x.err?esc(x.err):`${x.stats.watches} ${x.stats.watches===1?'Wache':'Wachen'} · ${x.stats.words} ${x.stats.words===1?'neues Wort':'neue Wörter'} · ${x.stats.answers} ${x.stats.answers===1?'Antwort':'Antworten'}`}</span></div><b class="crew-pts">${x.stats.pts}</b>${x.remote?`<button class="del" data-act="crew-del" data-id="${esc(x.id)}" aria-label="${esc(x.name)} entfernen">×</button>`:''}</li>`).join('')}</ol>
+ <p class="hint">Punkte: Wache 30 · neues Wort, das sitzt, 5 · jede Antwort 1. Jeden Montag geht es von vorn los.</p></section>`;
+ h+=`<section class="panel"><h2>Crew zusammenstellen</h2><p class="hint">Andere Profile auf deinem Konto sind automatisch dabei. Wer ein eigenes Konto hat (eigener GitHub-Token), tauscht mit dir einen Crew-Code aus.</p>
+ ${canSync()?`<label class="check"><input type="checkbox" id="crew-share" ${db.crew.share?'checked':''}> Meine Wochenzahlen teilen (nur Name und Punkte, keine Wörter oder Schlüssel)</label>
+  ${db.crew.share?db.crew.gist?`<div class="fld"><span>Dein Crew-Code</span><div class="write"><input readonly value="${esc(db.crew.gist)}" aria-label="Dein Crew-Code" id="crew-code"><button class="btn" data-act="crew-copy">Kopieren</button></div></div>`:'<p class="thinking">Crew-Code wird erstellt …</p>':''}`
+  :'<p class="note">Zum Teilen brauchst du die Sicherung mit GitHub-Token (Einstellungen). Codes anderer kannst du trotzdem eintragen.</p>'}
+ <form class="write" id="crew-form" autocomplete="off"><input id="crew-add" placeholder="Crew-Code eines anderen" aria-label="Crew-Code eintragen" spellcheck="false" autocapitalize="off"><button class="btn primary">Dazu</button></form>${C.err?errHtml(C.err):''}</section>`;
+ app.innerHTML=h;crewFetch()}

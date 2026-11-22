@@ -563,3 +563,18 @@ a.btn{text-decoration:none;text-align:center;justify-content:center;box-sizing:b
 .talk-prog .dots i.on{background:var(--accent)}
 .talk-done{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);animation:pop .4s ease-out}
 .talk-done .w-gull{flex:none}.talk-done b{display:block;font-size:1.05rem}
+/* Lernvorschläge: wackelig, Mini-Wache, andersrum, Lückensatz */
+.pill.wob{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.mini-btn{justify-content:center;gap:8px}
+.rev-hint{margin:-4px 0 0;color:var(--accent)}
+.q-prompt.cloze{font-size:1.25rem;line-height:1.5;font-weight:600}
+.q-prompt.cloze .gap{min-width:3.5em}
+/* Wochenrückblick, Crew */
+.wob-list{margin:4px 0 10px;padding-left:18px;display:grid;gap:4px}
+.big-nums small{font-size:.75rem;font-weight:700}.big-nums small.g{color:var(--good)}.big-nums small.r{color:var(--bad)}
+.crew-list{list-style:none;margin:6px 0;padding:0;display:grid;gap:8px}
+.crew-list li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.crew-list li.me{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.crew-rank{width:1.6em;text-align:center;font-weight:800;color:var(--muted)}
+.crew-pts{font-size:1.15rem;margin-left:auto;color:var(--accent)}
+.crew-ico{font-size:1.6rem;width:46px;text-align:center}

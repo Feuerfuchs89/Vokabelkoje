@@ -146,12 +146,12 @@ function gullFixNote(L,fx,G){if(!fx.thema)return;const P=prof(L),k=wkey(fx.thema
 const GULL_MAX=5;
 const gullChatOK=()=>aiOK()&&!learnOffline()&&!!activeLang()&&activeLang()!=='de-DE'&&!(curProf()&&curProf().kid);
 const gullChatBtn=()=>gullChatOK()?`<button type="button" class="chip gull-chat" data-act="gull-chat">💬 Schnacken?</button>`:'';
-function startGullChat(){const L=activeLang();if(!gullChatOK())return toast(learnOffline()?offlineMsg():'Wähl zuerst eine Lernsprache');adoptLevel(L);
- go('gull',{lang:L,G:{turns:[],busy:false,err:'',mood:'happy',act:''}});gullSend(null)}
+function startGullChat(words){const L=activeLang();if(!gullChatOK())return toast(learnOffline()?offlineMsg():'Wähl zuerst eine Lernsprache');adoptLevel(L);
+ go('gull',{lang:L,G:{turns:[],busy:false,err:'',mood:'happy',act:'',words:Array.isArray(words)?words.slice(0,5):null}});gullSend(null)}
 function gullRules(L){const TL=langName(L),me=db.me||{},mem=(me.gullMem||[]).slice(-12),f=dailyFocus(L),G=view.G,mine=G.turns.filter(t=>t.role==='user').length;
  return `Du bist ${gullName()}, eine freche, herzliche Möwe aus einem Hafen, und Maskottchen einer Sprachlern-App. Du plauderst mit ${me.name||'dem Lerner'} locker auf ${TL}, wie mit einem Freund am Steg.
 Niveau des Lerners: ${prefs.level}. Sprich ausschließlich ${TL}, kurze Sätze (1 bis 3), passend zum Niveau, mit einer Prise Seemanns-Humor. Stell meist eine Frage.
-${mem.length?`Das weißt du schon über den Lerner (frag gern nach, aber nicht alles auf einmal): ${mem.join('; ')}.\n`:''}${f?`Bau ganz nebenbei das Thema „${f.w.topic}“ ein, sodass der Lerner es selbst benutzen muss.\n`:''}Die Runde hat ${GULL_MAX} Nachrichten des Lerners, bisher ${mine}. ${mine>=GULL_MAX?'Das war seine letzte Nachricht: verabschiede dich herzlich und seemännisch, keine Frage mehr.':mine===GULL_MAX-1?'Steuere langsam auf einen Abschied zu.':''}
+${mem.length?`Das weißt du schon über den Lerner (frag gern nach, aber nicht alles auf einmal): ${mem.join('; ')}.\n`:''}${G.words&&G.words.length?`Diese Wörter fallen dem Lerner gerade schwer: ${G.words.join(', ')}. Bau sie nach und nach ins Gespräch ein und bring ihn dazu, sie selbst zu benutzen.\n`:f?`Bau ganz nebenbei das Thema „${f.w.topic}“ ein, sodass der Lerner es selbst benutzen muss.\n`:''}Die Runde hat ${GULL_MAX} Nachrichten des Lerners, bisher ${mine}. ${mine>=GULL_MAX?'Das war seine letzte Nachricht: verabschiede dich herzlich und seemännisch, keine Frage mehr.':mine===GULL_MAX-1?'Steuere langsam auf einen Abschied zu.':''}
 Wenn die letzte Nachricht des Lerners einen Fehler hat, nenne genau einen in „fix“ (sonst null). Kleinigkeiten wie fehlende Akzente ignorieren.
 „fix.thema“ ist ein kurzer deutscher Name für das Muster dahinter, z. B. „Vergangenheit“ oder „Artikel und Geschlecht“.${openWeak(L).length?` Nutze denselben Namen, wenn es um eines dieser bekannten Themen geht: ${openWeak(L).slice(0,12).map(w=>w.topic).join('; ')}.`:''}
 ${mine>=GULL_MAX?'Schätze außerdem in „niveau“ aus ALLEN Nachrichten des Lerners sein aktives Niveau als Zahl von 0 bis 6 (0–1 A1, 1–2 A2, 2–3 B1, 3–4 B2, 4–5 C1, 5–6 C2, z. B. 1.7 = oberes A2), sonst null.':'„niveau“ ist null.'}

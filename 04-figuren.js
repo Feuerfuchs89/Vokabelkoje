@@ -228,6 +228,7 @@ function deck(){const me=db.me||{},si=streakInfo(),k=dayKey(),watched=db.watch&&
   <label class="fld"><span>Und wie soll ich dich nennen? (freiwillig)</span><input id="gull-you" maxlength="24" value="${esc(me.name||'')}" placeholder="z. B. Micha"></label></div></div></section>`;
  return `<section class="deck" aria-label="${esc(me.gull)} und deine Wache"><div class="gull-row"><button class="gull-host" id="gull-host" data-act="gull-tap" aria-label="${esc(me.gull)} antippen">${gullSVG(watched?'happy':'idle',88)}</button><div class="bubble" id="gull-say" aria-live="polite"><span class="gull-name">${esc(me.gull)}</span><p>${gullMsg()}</p>${gullChatBtn()}</div></div>
  <button class="btn primary wide watch-btn" data-act="watch"><span class="wb-mon">${monsterSVG(monsterNext().id,54)}</span><span class="wb-txt"><b>${watched?'Noch eine Wache':'Eine Wache'}: ${esc(monsterNext().name)} besiegen</b><small>ca. 5 Minuten${activeLang()?' · '+langName(activeLang()):''}</small></span></button>
+ ${due?`<button class="btn wide mini-btn" data-act="mini"><span aria-hidden="true">⚡</span> Mini-Wache · 5 Karten, 1 Minute</button>`:''}
  ${weekRow(si)}
  <div class="row-between deck-stats"><span class="streak">${si.n} ${si.n===1?'Tag':'Tage'} auf Kurs</span><span class="hint">Flautetage diese Woche: ${si.usedThisWeek} von 2</span></div>
  <button class="linkbtn" data-act="trophies" style="align-self:flex-start">Besiegte Seeungeheuer: ${slainList().length}</button>

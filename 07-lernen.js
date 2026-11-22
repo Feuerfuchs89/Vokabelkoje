@@ -104,9 +104,15 @@ function startLearn(s,reset){
  if(reset){s.cards.forEach(c=>{c.m=0;c.lv=0;c.due=0;touch(c)});save()}
  const items=shuffle(pool(s).filter(c=>c.lv<1).map(c=>({sid:s.id,cid:c.id}))).slice(0,LEARN_CHUNK);
  go('q',{back:'set',id:s.id,Q:{kind:'learn',items,session:items.slice(),failed:new Set(),done:0,cur:null}})}
-function startReview(items,back,id){
- go('q',{back,id,Q:{kind:'review',items:shuffle(items.slice()),session:items.slice(),failed:new Set(),done:0,cur:null}})}
-const qKey=it=>it.sid+':'+it.cid;
+function startReview(items,back,id,mini){
+ go('q',{back,id,Q:{kind:'review',mini:!!mini,items:mini?items.slice():shuffle(items.slice()),session:items.slice(),failed:new Set(),seen:new Set(),done:0,cur:null}})}
+// Mini-Wache: 5 Karten für zwischendurch – zuerst fällige Wackelkandidaten, dann Fällige, sonst Wackelkandidaten
+function miniItems(){const due=allDue(),cw=it=>{const c=card(getSet(it.sid),it.cid);return c&&isWob(c)};
+ let items=[...shuffle(due.filter(cw)),...shuffle(due.filter(it=>!cw(it)))].slice(0,5);
+ if(items.length<5){const have=new Set(items.map(it=>it.sid+':'+it.cid));db.sets.filter(inLang).forEach(s=>s.cards.forEach(c=>{if(items.length<5&&isWob(c)&&c.lv>=1&&!have.has(s.id+':'+c.id))items.push({sid:s.id,cid:c.id})}))}
+ return items}
+function startMini(){const items=miniItems();if(!items.length)return toast(`${gullName()}: Gerade ist nichts fällig. Gönn dir die Pause!`);startReview(items,'home',null,true)}
+const qKey=it=>it.sid+':'+it.cid+(it.rev?':r':'');
 function vQ(){
  const Q=view.Q,learn=Q.kind==='learn';
  const backTitle=view.back==='set'?(getSet(view.id)||{}).title:'';
@@ -119,15 +125,21 @@ function vQ(){
   }else if(Q.kind==='watch'){vWatchDone(Q)}else{
    const dues=Q.session.map(it=>card(getSet(it.sid),it.cid)).filter(Boolean).map(c=>c.due);
    const next=allDue().length?0:Math.min(...db.sets.flatMap(s=>s.cards.filter(c=>c.lv>=1).map(c=>c.due)),Infinity);
-   app.innerHTML=bar(view.back,backTitle)+`<section class="summary"><h1>Wiederholung geschafft</h1>
+   app.innerHTML=bar(view.back,backTitle)+`<section class="summary"><h1>${Q.mini?'Mini-Wache geschafft':'Wiederholung geschafft'}</h1>${Q.mini?`<p class="muted">${esc(gullName())}: „${pickDay(['Kurz und knackig – so bleibt’s hängen.','Eine Minute, fünf Wörter. Läuft!','Kleine Häppchen, großer Fang.'])}“ Am besten heute noch ein-, zweimal zwischendurch.</p>`:''}
    <div class="big-nums"><div><b class="g">${Q.done}</b><span>wiederholt</span></div><div><b class="r">${Q.failed.size}</b><span>mit Fehler</span></div></div>
    <p class="muted">${Q.failed.size?'Begriffe mit Fehler fangen wieder in Fach 1 an und kommen morgen nochmal. ':''}${next&&next<Infinity?`Nächste Wiederholung: ${relDay(next)}.`:''}</p>
    <button class="btn primary wide" data-act="back" data-to="${view.back}">Fertig</button></section>`;
   }
   return}
  if(!Q.cur){const it=Q.items[0],s=getSet(it.sid),c=card(s,it.cid);if(!c){Q.items.shift();return render()}
-  Q.cur=it;Q.type=(learn||(Q.kind==='watch'&&it.isNew))&&(c.m||0)===0&&s.cards.length>=2?'mc':'write';Q.opts=Q.type==='mc'?options(s,c,prefs.dir):null;Q.res=null;Q.editing=false;Q.speaking=false;Q.help={lv:0}}
- const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid),{prompt,answer,askLang,ansLang}=dirOf(s,c);
+  const D0=itDir(it),fresh=learn||(Q.kind==='watch'&&it.isNew);
+  Q.cur=it;Q.type=fresh&&(c.m||0)===0&&s.cards.length>=2?'mc':'write';Q.cloze=null;
+  // Sitzt die Karte schon eine Weile: manchmal im Beispielsatz abfragen statt als Einzelwort
+  if(!fresh&&!it.rev&&Q.type==='write'&&c.lv>=3&&Math.random()<.5){const z=clozeOf(s,c);if(z){Q.type='cloze';Q.cloze=z}}
+  Q.shownAt=Date.now();Q.opts=Q.type==='mc'?options(s,c,D0):null;Q.res=null;Q.editing=false;Q.speaking=false;Q.help={lv:0}}
+ const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid),Z=Q.type==='cloze'?Q.cloze:null;let {prompt,answer,askLang,ansLang}=dirOf(s,c,itDir(Q.cur));
+ // Lückensatz: immer das Wort in der Fremdsprache gesucht, Hinweis ist die deutsche Bedeutung
+ if(Z){const tl=targetLang(s);ansLang=tl;answer=Z.word;prompt=tl===s.l1?c.d:c.t;askLang=tl===s.l1?s.l2:s.l1}
  const prog=learn?Q.session.filter(it=>{const x=card(getSet(it.sid),it.cid);return x&&x.lv>=1}).length:Q.done;
  const r=Q.res;
  let body='';
@@ -135,12 +147,13 @@ function vQ(){
   body=`<p class="label">Wähle die richtige Antwort</p><div class="opts">${Q.opts.map((o,i)=>{let cl='';if(r){if(o===answer)cl='ok';else if(i===r.pick)cl='no'}
    return `<button class="opt ${cl}" data-act="q-opt" data-i="${i}" ${r?'disabled':''}><span class="n">${i+1}</span><span>${esc(o)}</span></button>`}).join('')}</div>`;
  }else{
-  body=`<p class="label">Schreib es auf ${langName(ansLang)}</p><form class="write" id="q-form" autocomplete="off"><input id="q-in" lang="${short(ansLang)}" value="${esc(r?r.input:'')}" ${r?'disabled':''} autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Deine Antwort" placeholder="Antwort eingeben">${r?'':micBtn('q-in',ansLang)}<button class="btn primary" ${r?'disabled':''}>Prüfen</button></form>
+  body=`<p class="label">${Z?`Setz das passende Wort auf ${langName(ansLang)} ein`:`Schreib es auf ${langName(ansLang)}`}</p><form class="write" id="q-form" autocomplete="off"><input id="q-in" lang="${short(ansLang)}" value="${esc(r?r.input:'')}" ${r?'disabled':''} autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Deine Antwort" placeholder="Antwort eingeben">${r?'':micBtn('q-in',ansLang)}<button class="btn primary" ${r?'disabled':''}>Prüfen</button></form>
   ${r?'':`${helpHtml(Q.help||{},'q-help',ansLang)}<div class="row-between"><button class="linkbtn" data-act="q-idk">Weiß ich nicht</button></div>${dictHint}`}`;
  }
  let fb='';
  if(r){
   const ex=c.ex?`<span class="ex">${esc(c.ex)}</span>`:'';
+  if(Z)return vQfb(Q,s,c,r,answer,ansLang,Z,body,prompt,askLang,prog,learn,backTitle);
   fb=r.helped?`<div class="fb no"><div class="row-between"><strong>Mit Lösungshilfe</strong>${sayBtn(answer,ansLang)}</div><span>Richtig ist: <span class="ans">${esc(answer)}</span></span><span class="muted">Zählt nicht als gewusst – der Begriff kommt bald wieder.</span>${ex}</div>`:r.ok?`<div class="fb ok"><div class="row-between"><strong>${r.hint?'Fast genau richtig':'Richtig'}</strong>${sayBtn(answer,ansLang)}</div><span>Antwort: <span class="ans">${esc(answer)}</span></span>${ex}</div>`
    :`<div class="fb no"><div class="row-between"><strong>${r.idk?'Kein Problem, merk dir:':'Noch nicht'}</strong>${sayBtn(answer,ansLang)}</div><span>Richtig ist: <span class="ans">${esc(answer)}</span></span>${r.input&&!r.idk?`<span class="muted">Deine Antwort: ${esc(r.input)}</span>`:''}${ex}</div>`;
   if(Q.editing){
@@ -154,21 +167,31 @@ function vQ(){
  app.innerHTML=bar(view.back,backTitle||(Q.kind==='watch'?'Wache':'Wiederholen'))+(Q.kind==='watch'?battleHead(Q):'')+`
  <div class="prog" ${Q.kind==='watch'?'hidden':''}><span>${prog} / ${Q.session.length} ${learn?'sitzen':Q.kind==='watch'?'geschafft':'wiederholt'}</span><div class="pbar"><i style="width:${Q.session.length?prog/Q.session.length*100:0}%"></i></div></div>
  <section class="q"><div class="row-between"><span class="label">${learn?'':esc(s.title)+' · '}${langName(askLang)} · ${Q.type==='mc'?'Ankreuzen':'Schreiben'}</span><span style="display:flex;gap:6px;align-items:center">${pill(c)}${starBtn(c,'cur-star')}</span></div>
- <div class="q-prompt"><div>${esc(prompt)}</div>${sayBtn(prompt,askLang)}</div>${body}${fb}</section>
+ <div class="q-prompt"><div>${esc(prompt)}</div>${sayBtn(prompt,askLang)}</div>${Q.cur.rev?'<p class="hint rev-hint">Andersrum: Diese Karte sitzt – jetzt antwortest du selbst.</p>':''}${body}${fb}</section>
  <div class="tools"><button class="chip" data-act="q-dir">Antwort auf ${langName(ansLang)}</button>${autoChip()}</div>`;
+ if(Z&&!r)return vQz(Q,s,c,Z,prompt,askLang,ansLang,body,prog,learn,backTitle);
  if(prefs.auto&&!r&&Q.spoken!==qKey(Q.cur)+prefs.dir+Q.items.length){Q.spoken=qKey(Q.cur)+prefs.dir+Q.items.length;speak(prompt,askLang)}
+ if(!r)qPrefetch(Q);
  if(r){if(Q.editing)$('#qe-t').focus();else if(!Q.speaking)$('#q-next').focus()}
  else if(Q.type==='write')$('#q-in').focus();
 }
-function qAnswer(res){const Q=view.Q,s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);Q.res=res;logAnswer();if(Q.kind==='watch')Q.anim=res.ok?'hit':'miss';
+// Gemini-Aufnahmen für diese und die nächsten zwei Karten schon holen, damit die Wörter sofort zu hören sind
+function qPrefetch(Q){try{const list=[];[Q.cur,...Q.items.filter(x=>x!==Q.cur).slice(0,2)].forEach(it=>{if(!it)return;const s=getSet(it.sid),c=s&&card(s,it.cid);if(!c)return;const d=dirOf(s,c,itDir(it));
+  if(prefs.auto)list.push([d.prompt,d.askLang]);list.push([d.answer,d.ansLang]);if(!prefs.auto)list.push([d.prompt,d.askLang])});audioPrefetch(list)}catch(e){}}
+// Was gilt bei dieser Abfrage als richtig? Beim Lückensatz die Form im Satz, notfalls die Grundform
+function qAnswerOf(Q){const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid),d=dirOf(s,c,itDir(Q.cur));return Q.type==='cloze'&&Q.cloze?{...d,answer:Q.cloze.word,alt:Q.cloze.base,ansLang:targetLang(s)}:d}
+function qCheck(Q,v){const a=qAnswerOf(Q);let r=check(v,a.answer);if(r<=0&&a.alt&&check(v,a.alt)>0)r=1;return r}
+function qAnswer(res){const Q=view.Q,s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);Q.res=res;logAnswer();
+ // Wackel-Wert nur beim ersten Versuch je Karte und nur für Karten, die schon im Wiederholplan sind
+ Q.seen=Q.seen||new Set();if(!Q.seen.has(qKey(Q.cur))){Q.seen.add(qKey(Q.cur));if(Q.kind!=='learn'&&!Q.cur.isNew&&!Q.cur.rev&&c.lv>=1)wobble(c,res,Date.now()-(Q.shownAt||Date.now()))}if(Q.kind==='watch')Q.anim=res.ok?'hit':'miss';
  if((Q.kind==='review'||(Q.kind==='watch'&&!Q.cur.isNew))&&!res.ok&&!Q.failed.has(qKey(Q.cur))){Q.failed.add(qKey(Q.cur));res.addedFail=true}
  Q.speaking=prefs.auto&&(hasTTS||cloudOK());render();
- if(Q.speaking){const{answer,ansLang}=dirOf(s,c);speak(answer,ansLang,()=>{if(view.Q!==Q||Q.res!==res)return;Q.speaking=false;const b=$('#q-next');if(b){b.disabled=false;b.textContent='Weiter';if(!Q.editing)b.focus()}})}}
+ if(Q.speaking){const{answer,ansLang}=qAnswerOf(Q);speak(Q.type==='cloze'&&Q.cloze?Q.cloze.full:answer,ansLang,()=>{if(view.Q!==Q||Q.res!==res)return;Q.speaking=false;const b=$('#q-next');if(b){b.disabled=false;b.textContent='Weiter';if(!Q.editing)b.focus()}})}}
 function qNext(){const Q=view.Q;if(!Q.res)return;const it=Q.items.shift(),c=card(getSet(it.sid),it.cid);
- if(c){const lm=Q.kind==='learn'||(Q.kind==='watch'&&it.isNew);const again=lm?gradeLearn(c,Q.res.ok):gradeReview(c,Q.res.ok,Q.failed.has(qKey(it)));
+ if(c){const lm=Q.kind==='learn'||(Q.kind==='watch'&&it.isNew);const again=it.rev?gradeRev(c,Q.res.ok,Q.failed.has(qKey(it))):lm?gradeLearn(c,Q.res.ok):gradeReview(c,Q.res.ok,Q.failed.has(qKey(it)));
   if(again)Q.items.splice(Math.min(Q.res.ok?3:2,Q.items.length),0,it);else if(Q.kind!=='learn')Q.done++}
  db.fresh=false;save();Q.cur=null;Q.res=null;Q.speaking=false;render()}
-function answerMc(i){const Q=view.Q;if(Q.res||Q.type!=='mc')return;const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);qAnswer({ok:Q.opts[i]===dirOf(s,c).answer,pick:i})}
+function answerMc(i){const Q=view.Q;if(Q.res||Q.type!=='mc')return;const s=getSet(Q.cur.sid),c=card(s,Q.cur.cid);qAnswer({ok:Q.opts[i]===dirOf(s,c,itDir(Q.cur)).answer,pick:i})}
 
 /* ---------- Freihändig ---------- */
 function startHands(s){const p=pool(s);let items=shuffle(p.filter(isDue)).concat(shuffle(p.filter(c=>c.lv<1)));
@@ -229,3 +252,21 @@ function hfJudge(alts){const H=view.H,s=getSet(view.id),c=card(s,H.items[0]),{an
  if(ok)speak('Richtig.','de-DE',next,false,hfVoice());
  else speak(idk?'Die Antwort ist':'Leider nicht. Richtig ist','de-DE',()=>{if(H.stopped||H.state!=='feedback')return;speak(answer,ansLang,next,false,hfVoice())},false,hfVoice())}
 function hfPause(){const H=view.H;H.state='paused';H.msg='';stopListen();stopSpeak();releaseWake();render()}
+
+/* ---------- Lückensatz-Abfrage ---------- */
+function vQshell(Q,s,c,inner,prog,learn,backTitle,askLang,prompt){
+ return bar(view.back,backTitle||(Q.kind==='watch'?'Wache':Q.mini?'Mini-Wache':'Wiederholen'))+(Q.kind==='watch'?battleHead(Q):'')+`
+ <div class="prog" ${Q.kind==='watch'?'hidden':''}><span>${prog} / ${Q.session.length} ${learn?'sitzen':Q.kind==='watch'?'geschafft':'wiederholt'}</span><div class="pbar"><i style="width:${Q.session.length?prog/Q.session.length*100:0}%"></i></div></div>
+ <section class="q"><div class="row-between"><span class="label">${learn?'':esc(s.title)+' · '}Im Satz</span><span style="display:flex;gap:6px;align-items:center">${pill(c)}${starBtn(c,'cur-star')}</span></div>${inner}</section>
+ <div class="tools"><button class="chip" data-act="q-dir">Antwort auf ${langName(dirOf(s,c,flipDir(itDir(Q.cur))).ansLang)}</button>${autoChip()}</div>`}
+const clozeHtml=(Z,ansLang,fill)=>`<div class="q-prompt cloze" lang="${short(ansLang)}"><div>${esc(Z.sent).replace('___',fill?`<b class="gap ok">${esc(fill)}</b>`:'<span class="gap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>')}</div></div>`;
+function vQz(Q,s,c,Z,prompt,askLang,ansLang,body,prog,learn,backTitle){
+ app.innerHTML=vQshell(Q,s,c,`${clozeHtml(Z,ansLang)}<p class="hint">Gesucht: <b>${esc(prompt)}</b> ${sayBtn(prompt,askLang)}</p>${body}`,prog,learn,backTitle);
+ qPrefetch(Q);const i=$('#q-in');if(i)i.focus()}
+function vQfb(Q,s,c,r,answer,ansLang,Z,body,prompt,askLang,prog,learn,backTitle){
+ const fb=r.helped?`<div class="fb no"><div class="row-between"><strong>Mit Lösungshilfe</strong>${sayBtn(Z.full,ansLang)}</div><span class="muted">Zählt nicht als gewusst – der Begriff kommt bald wieder.</span></div>`
+  :r.ok?`<div class="fb ok"><div class="row-between"><strong>${r.hint?'Richtig – im Satz heißt es aber so':'Richtig'}</strong>${sayBtn(Z.full,ansLang)}</div><span>Wort: <span class="ans">${esc(Z.word)}</span>${norm(Z.word)!==norm(Z.base)?` <span class="muted">(Grundform: ${esc(Z.base)})</span>`:''}</span></div>`
+  :`<div class="fb no"><div class="row-between"><strong>${r.idk?'Kein Problem, merk dir:':'Noch nicht'}</strong>${sayBtn(Z.full,ansLang)}</div><span>Richtig ist: <span class="ans">${esc(Z.word)}</span>${norm(Z.word)!==norm(Z.base)?` <span class="muted">(Grundform: ${esc(Z.base)})</span>`:''}</span>${r.input&&!r.idk?`<span class="muted">Deine Antwort: ${esc(r.input)}</span>`:''}</div>`;
+ const nav=`<div class="row-between"><span style="display:flex;gap:14px;flex-wrap:wrap">${!r.ok&&r.input&&!r.idk?`<button class="linkbtn" data-act="q-override">Ich lag doch richtig</button>`:''}</span><button class="btn primary" id="q-next" data-act="q-next" ${Q.speaking?'disabled':''}>${Q.speaking?'Wird vorgelesen …':'Weiter'}</button></div>`;
+ app.innerHTML=vQshell(Q,s,c,`${clozeHtml(Z,ansLang,Z.word)}<p class="hint">Gesucht: <b>${esc(prompt)}</b></p>${body}${fb}${nav}`,prog,learn,backTitle);
+ if(!Q.speaking){const b=$('#q-next');if(b)b.focus()}}
